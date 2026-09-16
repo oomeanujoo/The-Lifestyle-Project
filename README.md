@@ -64,6 +64,12 @@ Run those last four commands from the repository root in separate terminals. On 
 
 Check `http://localhost:5173`, all three info URLs above, and `http://localhost:8081/actuator/health` / `http://localhost:8082/actuator/health` / `http://localhost:8083/actuator/health`.
 
+## Full Compose stack with automatic rebuilds
+
+From PowerShell at the repository root, run `./scripts/watch-compose.ps1` to build and start PostgreSQL and all four application containers, then watch for saved source changes. Use `./scripts/watch-compose.ps1 -WithAi` to include the optional Ollama container. Compose rebuilds and recreates only the affected application container when its files change. Keep this terminal open while developing; closing it stops the watcher. PostgreSQL data stays in its existing volume, and the default command leaves Ollama optional. The first build may take several minutes; later builds reuse Docker's Gradle cache.
+
+External provider values belong in the ignored `.env`, not in Git. `GEONAMES_USERNAME` enables city lookups; Frankfurter needs no key. `DATA_GOV_IN_API_KEY`, `GROQ_API_KEY`, and `MISTRAL_API_KEY` enable their respective optional providers. The master refresh currently imports cities and exchange rates; data.gov.in is a sample lookup until its dataset schema has been verified for the property hierarchy. The Settings page reports each refresh result and error.
+
 ## Verify
 
 ```sh

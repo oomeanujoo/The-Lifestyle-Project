@@ -8,6 +8,7 @@ import { CityFolderPage } from './features/property/CityFolderPage'
 import { CityDetailPage } from './features/property/CityDetailPage'
 import { LocalityListPage } from './features/property/LocalityListPage'
 import { LocalityDetailPage } from './features/property/LocalityDetailPage'
+import { SettingsPage } from './features/settings/SettingsPage'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/property/cities/:cityId" element={<CityDetailPage />} />
         <Route path="/property/cities/:cityId/areas/:areaId" element={<LocalityListPage />} />
         <Route path="/property/cities/:cityId/areas/:areaId/localities/:localityId" element={<LocalityDetailPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AppShell>

@@ -1,10 +1,11 @@
-FROM eclipse-temurin:25.0.4_7-jdk-noble AS build
+FROM gradle:9.7.1-jdk25-noble AS build
+USER root
 WORKDIR /app
 COPY gradle ./gradle
 COPY gradlew settings.gradle build.gradle gradle.properties ./
 RUN chmod +x gradlew
 COPY src ./src
-RUN ./gradlew bootJar --no-daemon --max-workers=2
+RUN --mount=type=cache,target=/root/.gradle,id=lifestyle-gradle-cache,sharing=locked gradle bootJar --no-daemon --max-workers=2
 
 FROM eclipse-temurin:25.0.4_7-jre-alpine-3.24
 WORKDIR /app

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router'
-import { HomeIcon, PaperAirplaneIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline'
+import { HomeIcon, PaperAirplaneIcon, BuildingOffice2Icon, Cog6ToothIcon } from '@heroicons/react/24/outline'
 
 // One icon library, one consistent minimal (line/outline) style — see the
 // decision log entry on switching from mixed emoji to Heroicons.
@@ -7,6 +7,7 @@ const links = [
   { to: '/', label: 'Dashboard', Icon: HomeIcon, end: true },
   { to: '/travel', label: 'Travel', Icon: PaperAirplaneIcon },
   { to: '/property', label: 'Property', Icon: BuildingOffice2Icon },
+  { to: '/settings', label: 'Settings', Icon: Cog6ToothIcon },
 ]
 
 export function Nav() {

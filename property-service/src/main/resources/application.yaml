@@ -19,6 +19,23 @@ spring:
     default-schema: property
     create-schemas: true
 
+# Where to reach integration-service for external calls (§18) — this
+# service never calls Groq/Mistral/GeoNames directly, only through it.
+app:
+  integration:
+    base-url: ${INTEGRATION_SERVICE_URL:http://localhost:8083}
+  masters:
+    # The seed list a refresh looks up in GeoNames — matches the illustrative
+    # cities already in cityData.ts. A real "crawl everything" refresh is a
+    # later step; this is the honest first version: known places, kept current.
+    seed-cities: ${PROPERTY_SEED_CITIES:Pune,Bengaluru}
+    base-currency: ${BASE_CURRENCY:INR}
+    # AED was the original choice but Frankfurter is ECB-based and doesn't
+    # cover it — confirmed live, 2026-09-17: GET
+    # https://api.frankfurter.dev/v1/currencies has no AED key. Swapped
+    # for GBP so all three tracked currencies actually resolve.
+    tracked-currencies: ${TRACKED_CURRENCIES:USD,EUR,GBP}
+
 server:
   port: ${PROPERTY_PORT:8082}
 management:

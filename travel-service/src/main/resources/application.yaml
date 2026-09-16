@@ -19,6 +19,25 @@ spring:
     default-schema: travel
     create-schemas: true
 
+# Where to reach integration-service for external calls (§18) — this
+# service never calls Groq/Mistral/GeoNames directly, only through it.
+app:
+  integration:
+    base-url: ${INTEGRATION_SERVICE_URL:http://localhost:8083}
+  masters:
+    # The seed list a refresh looks up in GeoNames — matches the illustrative
+    # places already in tripData.ts. A real "crawl everything" refresh is a
+    # later step; this is the honest first version: known places, kept current.
+    seed-cities: ${TRAVEL_SEED_CITIES:Pune,Mumbai,Gwalior,Delhi,Dubai}
+    base-currency: ${BASE_CURRENCY:INR}
+    # AED was the original choice (relevant to the Dubai trip example) but
+    # Frankfurter is ECB-based and doesn't cover it — confirmed live,
+    # 2026-09-17: GET https://api.frankfurter.dev/v1/currencies has no AED
+    # key. Swapped for GBP so all three tracked currencies actually
+    # resolve; a Dubai-relevant rate needs a different free source later,
+    # honestly documented as a gap rather than silently always failing.
+    tracked-currencies: ${TRACKED_CURRENCIES:USD,EUR,GBP}
+
 server:
   port: ${TRAVEL_PORT:8081}
 

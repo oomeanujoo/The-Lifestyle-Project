@@ -32,6 +32,17 @@ services:
     build:
       context: ./lifestyle-web
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./lifestyle-web
+          ignore:
+            - node_modules/
+            - dist/
+            - .npm-cache/
+            - .env
+            - .env.*
+            - "*.log"
     ports:
       - "127.0.0.1:${WEB_PORT:-5173}:80"
     depends_on:
@@ -51,12 +62,27 @@ services:
     build:
       context: ./travel-service
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./travel-service
+          ignore:
+            - .gradle/
+            - build/
+            - .idea/
+            - "*.iml"
+            - "*.log"
     environment:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${POSTGRES_DB:-postgres}
       TRAVEL_DB_USER: ${TRAVEL_DB_USER:-travel_app}
       TRAVEL_DB_PASSWORD: ${TRAVEL_DB_PASSWORD:?Set TRAVEL_DB_PASSWORD in an ignored .env file}
+      # Without this, application.yaml's default (http://localhost:8083)
+      # means "this container itself" inside Docker's network, not the
+      # integration-service container — every master-data refresh call
+      # silently fails as a result. See TECHNICAL_ARCHITECTURE.md §17.3/§18.
+      INTEGRATION_SERVICE_URL: http://integration-service:8083
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx${TRAVEL_JVM_MAX_HEAP:-512m}
     ports:
       - "127.0.0.1:${TRAVEL_PORT:-8081}:8081"
@@ -74,12 +100,24 @@ services:
     build:
       context: ./property-service
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./property-service
+          ignore:
+            - .gradle/
+            - build/
+            - .idea/
+            - "*.iml"
+            - "*.log"
     environment:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${POSTGRES_DB:-postgres}
       PROPERTY_DB_USER: ${PROPERTY_DB_USER:-property_app}
       PROPERTY_DB_PASSWORD: ${PROPERTY_DB_PASSWORD:?Set PROPERTY_DB_PASSWORD in an ignored .env file}
+      # Same reasoning as travel-service — see that service's comment.
+      INTEGRATION_SERVICE_URL: http://integration-service:8083
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx${PROPERTY_JVM_MAX_HEAP:-512m}
     ports:
       - "127.0.0.1:${PROPERTY_PORT:-8082}:8082"
@@ -97,6 +135,16 @@ services:
     build:
       context: ./integration-service
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./integration-service
+          ignore:
+            - .gradle/
+            - build/
+            - .idea/
+            - "*.iml"
+            - "*.log"
     environment:
       DB_HOST: postgres
       DB_PORT: "5432"
@@ -105,6 +153,20 @@ services:
       INTEGRATION_DB_PASSWORD: ${INTEGRATION_DB_PASSWORD:?Set INTEGRATION_DB_PASSWORD in an ignored .env file}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b-instruct}
+      OLLAMA_READ_TIMEOUT_SECONDS: ${OLLAMA_READ_TIMEOUT_SECONDS:-420}
+      # These were missing entirely — Compose does NOT forward host/.env
+      # variables into a container unless listed here explicitly, so
+      # integration-service always saw these as unset regardless of what
+      # was in your .env file. Each defaults to empty, matching the
+      # existing "unset = unconfigured, calls are skipped" pattern (§18/§22)
+      # — no value is ever hardcoded here, only read from your own .env.
+      GEONAMES_USERNAME: ${GEONAMES_USERNAME:-}
+      DATA_GOV_IN_API_KEY: ${DATA_GOV_IN_API_KEY:-}
+      DATA_GOV_IN_RESOURCE_ID: ${DATA_GOV_IN_RESOURCE_ID:-5c2f62fe-5afa-4119-a499-fec9d604d5bd}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-small-latest}
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx${INTEGRATION_JVM_MAX_HEAP:-512m}
     ports:
       - "127.0.0.1:${INTEGRATION_PORT:-8083}:8083"

@@ -142,7 +142,9 @@ flowchart TB
     Area --> Locality["Locality<br/>e.g. Gandhi Nagar"]
     Locality --> LocalityDetail["BHK size · add-ons ·<br/>estimated total cost"]
 
-    class Dashboard,Gate neutral;
+    Dashboard --> Settings["Settings"]
+
+    class Dashboard,Gate,Settings neutral;
     class Travel,TripFolder,TripDetail travel;
     class Property,City,Area,Locality,LocalityDetail property;
 
@@ -151,7 +153,7 @@ flowchart TB
     classDef property fill:#7e22ce,stroke:#e9d5ff,color:#faf5ff,stroke-width:2px,rx:8,ry:8;
 ```
 
-Real routes in `App.tsx`: `/` (entry gate wraps everything), `/travel`, `/travel/trips/:tripId`, `/property`, `/property/cities/:cityId`, `/property/cities/:cityId/areas/:areaId`, `/property/cities/:cityId/areas/:areaId/localities/:localityId`. All content is illustrative/static (see [§15](#15-functionality-chapters)) — there's no backend API call behind any of it yet.
+Real routes in `App.tsx`: `/` (entry gate wraps everything), `/travel`, `/travel/trips/:tripId`, `/property`, `/property/cities/:cityId`, `/property/cities/:cityId/areas/:areaId`, `/property/cities/:cityId/areas/:areaId/localities/:localityId`, and `/settings` (§20). Travel/Property content is illustrative/static (see [§15](#15-functionality-chapters)) with no backend call behind it. `/settings` is the one exception — since 2026-09-16 it makes real HTTP calls to `travel-service`/`property-service` for currency options and master-refresh status/triggers (§20), even though that backend can't currently be exercised end-to-end from the machine this was built on (§12).
 
 ### 3.2 Navigation model
 
@@ -213,7 +215,7 @@ What's prioritized on a page, top to bottom, as actually built:
 
 ## 5. System overview
 
-Three independently runnable apps sharing one local database. No cloud account, no paid API, no internet required once installed. (C4 Context level.)
+**Updated 2026-09-16 — now four apps, not three, and AI/external calls route through the fourth one, not straight from Travel/Property.** No cloud account, no paid API required — Groq/Mistral are free-tier cloud calls, everything else runs locally. (C4 Context level.)
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background':'transparent','fontFamily':'Trebuchet MS, Verdana, sans-serif','fontSize':'15px','lineColor':'#5eead4'}, 'flowchart': {'curve': 'stepAfter'}}}%%
@@ -227,42 +229,54 @@ flowchart TB
         direction LR
         TravelSvc["travel-service<br/>:8081"]
         PropSvc["property-service<br/>:8082"]
+        IntSvc["integration-service<br/>:8083"]
     end
 
     TravelSvc --> TravelSchema
     PropSvc --> PropSchema
-    TravelSvc -.->|"optional"| AI
-    PropSvc -.->|"optional"| AI
+    TravelSvc -->|"master refresh — live"| IntSvc
+    PropSvc -->|"master refresh — live"| IntSvc
+    TravelSvc -.->|"AI fallback — not yet wired"| IntSvc
+    PropSvc -.->|"AI fallback — not yet wired"| IntSvc
+    IntSvc --> IntSchema
+    IntSvc --> AI
+    IntSvc -->|"live"| GeoFrank
+    IntSvc -.->|"manual endpoint only"| DataGovIn
 
-    subgraph Data["PostgreSQL 18 + optional local AI"]
+    subgraph Data["PostgreSQL 18 + AI + free external APIs"]
         direction LR
         TravelSchema[("travel<br/>schema")]
         PropSchema[("property<br/>schema")]
-        AI{{"Ollama<br/>:11434"}}
+        IntSchema[("integration<br/>schema")]
+        AI{{"Ollama :11434 →<br/>Groq → Mistral"}}
+        GeoFrank(["GeoNames +<br/>Frankfurter"])
+        DataGovIn(["data.gov.in"])
     end
 
     class Web neutral;
     class Backend,Data groupBorder;
     class TravelSvc,TravelSchema travel;
     class PropSvc,PropSchema property;
+    class IntSvc,IntSchema,GeoFrank,DataGovIn integration;
     class AI ai;
 
     classDef neutral fill:#334155,stroke:#94a3b8,color:#f1f5f9,stroke-width:2px,rx:8,ry:8;
     classDef groupBorder fill:transparent,stroke:#64748b,color:#e2e8f0,stroke-width:1.5px,rx:12,ry:12;
     classDef travel fill:#0e7490,stroke:#67e8f9,color:#ecfeff,stroke-width:2px,rx:8,ry:8;
     classDef property fill:#7e22ce,stroke:#e9d5ff,color:#faf5ff,stroke-width:2px,rx:8,ry:8;
+    classDef integration fill:#b45309,stroke:#fde68a,color:#fffbeb,stroke-width:2px,rx:8,ry:8;
     classDef ai fill:#b45309,stroke:#fde68a,color:#fffbeb,stroke-width:2px,stroke-dasharray:4 4,rx:8,ry:8;
 ```
 
-Solid arrows: exist today. Dashed: optional AI, off by default. Colors are consistent across every diagram: slate = shell/frontend, blue = Travel, purple = Property, amber dashed = optional AI.
+Solid arrows: real, live, actually called today. Dashed: designed but not yet wired, or manual-trigger only. Colors: slate = shell/frontend, blue = Travel, purple = Property, amber = the integration layer (both `integration-service` itself and everything past it — AI providers and external APIs).
 
-The web app never touches the database directly — only through a service's REST API. Travel never reads Property's schema. [§7](#7-data-architecture).
+The web app never touches the database directly — only through a service's REST API. Travel never reads Property's schema, and neither ever calls Groq/Mistral/GeoNames/Frankfurter/data.gov.in directly — only `integration-service` does. [§7](#7-data-architecture), [§18](#18-ais-role-in-this-application).
 
 ---
 
 ## 6. Inside one backend service
 
-Both services are structured identically, using hexagonal architecture ([§4](#4-key-terms)). This is the most important structural rule in the codebase. (C4 Component level, one zoom step in from [§5](#5-system-overview).)
+All three services are structured identically, using hexagonal architecture ([§4](#4-key-terms)) — including `integration-service`, even though its "domain" is external calls rather than business rules. This is the most important structural rule in the codebase. (C4 Component level, one zoom step in from [§5](#5-system-overview).)
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background':'transparent','fontFamily':'Trebuchet MS, Verdana, sans-serif','fontSize':'15px','lineColor':'#5eead4'}, 'flowchart': {'curve': 'stepAfter'}}}%%
@@ -297,7 +311,7 @@ This also makes AI safe by design ([§8](#8-ai-strategy)): it's just another out
 
 ## 7. Data architecture
 
-One PostgreSQL 18 server for local development; the two contexts never share data.
+One PostgreSQL 18 server for local development; three contexts (`travel`, `property`, `integration`) now share it as of 2026-09-16, but never share data — no cross-schema queries, each with its own role and Flyway history.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background':'transparent','fontFamily':'Trebuchet MS, Verdana, sans-serif','fontSize':'15px','lineColor':'#5eead4'}, 'flowchart': {'curve': 'stepAfter'}}}%%
@@ -314,7 +328,7 @@ flowchart TB
     classDef property fill:#7e22ce,stroke:#e9d5ff,color:#faf5ff,stroke-width:2px,rx:8,ry:8;
 ```
 
-One PostgreSQL 18 instance, two schemas, two login roles, two Flyway histories — a setup convenience, not shared ownership. No cross-schema foreign keys, no shared queries; cross-context needs go through APIs. (This is an ownership diagram, not yet a true ER diagram — there are no real tables until Phase 2; once there are, they get a proper flat-entity, orthogonal-relationship ER diagram here.)
+One PostgreSQL 18 instance, three schemas (`travel`/`property` above, plus `integration` — narrower, holding only `ai_suggestion` for AI-draft provenance, not business data), each its own login role and Flyway history — a setup convenience, not shared ownership. No cross-schema foreign keys, no shared queries; cross-context needs go through APIs. (This is an ownership diagram, not a true ER diagram — for that, see [§16](#16-planned-backend-data-model--masters-transactions-audit)'s real, flat-entity ER diagrams, which describe tables that now genuinely exist via Flyway, not a future-tense plan.)
 
 - **Typed columns for facts, JSONB only for variable extras** — amount, currency, source, timestamp are always typed and queryable.
 - **Price history is append-only** — corrections add a new observation, never overwrite the old one.
@@ -323,7 +337,7 @@ One PostgreSQL 18 instance, two schemas, two login roles, two Flyway histories �
 
 ## 8. AI strategy
 
-Planned for Phase 2+; no AI endpoint or model exists yet. Documented now because the *shape* is already decided ([ADR-004](docs/decisions/ADR-004-ai-provider-abstraction.md)).
+**Update 2026-09-16: this shape is no longer just planned — it's built, in `integration-service`.** The diagram below was written before any of it existed; it's kept because the shape it describes turned out to match what actually got built almost exactly (Ollama as the local/default provider, cloud providers as opt-in fallback, DRAFT→ACCEPTED lifecycle). See [§18](#18-ais-role-in-this-application) for the real, working detail: `AiProviderRouter` (Ollama → Groq → Mistral), real persistence of every draft into `integration.ai_suggestion`, and exactly what's still not wired up (the AI fallback isn't yet called by `travel-service`/`property-service`'s search). [ADR-004](docs/decisions/ADR-004-ai-provider-abstraction.md) has the original reasoning.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background':'transparent','fontFamily':'Trebuchet MS, Verdana, sans-serif','fontSize':'15px','lineColor':'#5eead4'}, 'flowchart': {'curve': 'basis'}}}%%
@@ -370,29 +384,31 @@ Every entry is stable, free, and runs locally — no paid service required. Exac
 | TypeScript | JavaScript with static types | Catches mistakes before runtime |
 | Vite | Build tool + dev server | Fast reload; provides the `/api/**` dev proxy |
 | React Router | Client-side page routing | Already used in the app shell and the Travel folder/trip routes |
-| TanStack Query | Server-state fetching/caching | Already used for the live service-status polling on the Dashboard |
+| TanStack Query | Server-state fetching/caching | Installed and the provider is wired at the app root (`main.tsx`), but not yet actually used anywhere — no `useQuery` call exists in the codebase yet. The Settings page's real backend calls (§20) use a plain `fetch` wrapper (`lib/apiClient.ts`) instead, for now |
 | Vitest | Test runner | Fast feedback, native Vite/TS support |
 | Tailwind CSS | Utility-class CSS framework (classes composed directly in JSX instead of hand-written stylesheet rules) | Enterprise-standard way to style a React app without a growing hand-rolled CSS file; `styles.css` is now just Tailwind's import plus the brand's design tokens (colors, fonts) as `@theme` variables — custom CSS only for the brand identity, nothing else |
 | Heroicons | Icon set from the Tailwind team (outline/solid SVG components) | One consistent, minimal icon language across nav/folder cards, instead of mixed emoji |
 | canvas-confetti | Small, dependency-free confetti-burst animation | The entry gate's celebratory moment on "Enter" — tiny (a few kB), no other library pulled in for it |
 
-**Backend** (both services)
+**Backend** (`travel-service`, `property-service`, `integration-service` — see [§18](#18-ais-role-in-this-application) for why there are three, not two)
 
 | Technology | What it is | Why |
 |---|---|---|
 | Java (LTS) | Statically typed, long-term-supported language | Fewer forced upgrades; suits hexagonal domain modeling |
 | Spring Boot | Web/DI framework | Industry standard for Java REST services |
 | Gradle (wrapper checked in) | Build tool | Every clone gets the identical Gradle version |
-| Flyway | DB migrations ([§4](#4-key-terms)) | Every environment's schema stays identical |
+| Flyway | DB migrations ([§4](#4-key-terms)) | Every environment's schema stays identical — real migrations now exist and have created the full §16 schema for travel/property, plus `integration.ai_suggestion` |
+| Plain `JdbcTemplate`, not JPA | Direct SQL, no ORM | Deliberate for now — the only persistence code that exists (§12, §18, §20) is a handful of upsert/insert statements; no entity-mapping layer has been introduced yet |
+| Resilience4j (core modules only) | Rate limiting + circuit breaking | Protects free-tier AI/API quotas (§17.3, §18) — the core library, constructed by hand, not the Spring Boot starter/autoconfig module, since that module's Boot-4.1 compatibility couldn't be verified on the machine that added it |
 | springdoc-openapi (Swagger UI) | Generates a live API reference (`/swagger-ui.html`) + machine-readable contract (`/v3/api-docs`) from the controllers | Self-documenting API — can't silently go stale like hand-written docs |
 
 **Data & infrastructure**
 
 | Technology | What it is | Why |
 |---|---|---|
-| PostgreSQL | Free, ACID-compliant relational database | Typed columns + JSONB covers everything Phase 1–2 need |
-| Docker Compose | Multi-container local orchestration | Reproducible setup without installing Postgres on the host |
-| Ollama *(optional)* | Local LLM runner, no cloud account | Zero-cost AI matching the local-first principle |
+| PostgreSQL | Free, ACID-compliant relational database | Typed columns + JSONB covers everything Phase 1–2 need; a real instance now exists with `travel`/`property`/`integration` schemas (§12) |
+| Docker Compose | Multi-container local orchestration | **Reconciled 2026-09-17** — `compose.yaml` now containerizes all four apps (`lifestyle-web`, `travel-service`, `property-service`, `integration-service`, each with its own `Dockerfile`), plus `postgres`/`ollama`, with Compose Watch (`develop.watch`) rebuilding a service on source changes. The earlier native-Postgres note is resolved — this Compose file is the real setup now, run and verified working on the machine that has a real JDK 25 |
+| Ollama | Local LLM runner, no cloud account | No longer just optional-in-principle — it's `integration-service`'s **first-priority** AI provider (§18), ahead of Groq/Mistral, confirmed working with `qwen3:4b-instruct` on the machine that has it running |
 
 **Explicitly deferred** (not installed): Spring AI (no call site yet), pgvector, PostGIS, Redis, Kafka, Elasticsearch, MinIO, any second database. Each has a documented trigger condition in [docs/data-strategy.md](docs/data-strategy.md) — none added speculatively.
 
@@ -428,16 +444,56 @@ Full context: [AGENTS.md](AGENTS.md).
 
 Two different things are true at once here, and it's worth being precise about which is which:
 
-- **Backend (`travel-service`, `property-service`, `integration-service`):** still Phase 1 scaffolding for real domain persistence — health/info/Swagger endpoints, schema-isolated PostgreSQL (travel/property only), no real domain persistence anywhere. On top of that scaffolding, all three now also have a working DB-first place search (travel/property) and a working set of external API clients (`integration-service`, §18) — real code, uncompiled on this machine, not yet wired to each other over HTTP.
-- **Frontend (`lifestyle-web`):** has grown well past a "shell" — a real entry experience, a working Travel flow (trip folders → route comparison with sortable multi-mode legs → an illustrated journey map → optional itinerary), and a working Property flow (city folders → area/locality drill-down → BHK-size + add-on cost estimator) all exist and run, backed by static illustrative data (see [§3.3](#33-content-taxonomy)), not a live API.
+- **Backend (`travel-service`, `property-service`, `integration-service`):** more built than "Phase 1 scaffolding" implies, but with real gaps that matter. A real Postgres instance now exists (on the Java-25-capable machine, not this one) with `travel`/`property`/`integration` schemas and restricted per-service roles. Flyway has created the **entire planned schema** from §16 for Travel and Property — masters, transaction tables, and audit log, not just a marker table — plus `integration.ai_suggestion` for AI-draft provenance. No JPA entity layer exists anywhere (a deliberate choice, not an oversight — see the decision log): the only code actually touching these tables is plain `JdbcTemplate`, and it only touches a few of them: `city`/`currency` masters (via `MasterRefreshUseCase`, §20) and `ai_suggestion` (via `PlaceSuggestionUseCase`, §18). Everything else in the schema — `trip_plan`, `route_option`, `rent_snapshot`, `cost_estimate`, and the rest — is real, created DDL with **zero application code reading or writing it yet**. Place *search* (`PlaceSearchController`) still reads from `InMemoryPlaceRepository`, a fixture list, **not** the now-real `city` table `MasterRefreshUseCase` populates — an inconsistency worth closing next, not a hidden secret. Cross-service HTTP calls exist for master refresh (`travel`/`property` → `integration-service` → GeoNames/Frankfurter) but not yet for the AI search fallback. Everything built on the Java-8 office-laptop machine this session (the master-refresh feature, the third microservice) is **written but not compiled** there — see §18/§20 for exactly which files and why that gap exists.
+- **Frontend (`lifestyle-web`):** has grown well past a "shell" — a real entry experience, a working Travel flow (trip folders → route comparison with sortable multi-mode legs → an illustrated journey map → optional itinerary), a working Property flow (city folders → area/locality drill-down → BHK-size + add-on cost estimator), a working Settings page (§20), and a Dashboard AI-status widget (§15.4) all exist and run. Travel/Property content is still backed by static illustrative data (see [§3.3](#33-content-taxonomy)), not a live API — Settings and the Dashboard widget are the **two exceptions**: the only parts of this app that make a real HTTP call to a backend, though that backend can't currently be exercised end-to-end from this same machine (see above).
 
-So: don't read "Phase 1" as "not much is built" anymore — the frontend UI is substantially ahead of the backend it will eventually talk to. Still not built anywhere: real persistence, live price providers, a scheduler, the AI runtime, PDF export, auth, hosted deployment. [docs/roadmap.md](docs/roadmap.md) · [README.md](README.md).
+So: don't read "Phase 1" as "not much is built" anymore — real schema, real (if narrow) persistence, and a real cross-service call all exist now. Still genuinely not built anywhere: live price providers, a scheduler, most of the planned schema actually being read/written by application code, PDF export, auth, hosted deployment. [docs/roadmap.md](docs/roadmap.md) · [README.md](README.md).
+
+### Responsibility map — what's responsible for what
+
+One line per component, answering exactly one question each — useful when you're trying to find *which file* owns a piece of behavior.
+
+| Component | Responsible for | Not responsible for |
+|---|---|---|
+| `lifestyle-web` | Everything you see and click; two real backend calls exist (Settings, Dashboard AI status) | Never talks to Postgres directly; never calls Groq/Mistral/GeoNames itself |
+| `travel-service` | Travel's own data (schema `travel`), its `PlaceSearchUseCase` (search fixture, not the real `city` table yet), its `MasterRefreshUseCase` (city+currency, real) | Property's data; talking to Groq/Mistral/GeoNames/Frankfurter directly — always via `integration-service` |
+| `property-service` | Property's own data (schema `property`), the same search/refresh pair as Travel, scoped to Property's masters | Travel's data; same external-call restriction as above |
+| `integration-service` | Every external call, from any service — AI providers (`AiProviderRouter`), GeoNames, Frankfurter, data.gov.in; rate limiting, circuit breaking, and health tracking for all of them (`ResilienceGuard`); the one small `ai_suggestion` table for AI-draft provenance | Any Travel/Property business data; it owns no `trip_plan`, no `property_plan` |
+| `ResilienceGuard` (inside integration-service) | Rate limiting + circuit breaking + health recording, for every outbound call, uniformly | Deciding *whether* to call — that's each `AiProvider`/client's `isConfigured()` check, done before `ResilienceGuard` is ever reached |
+| `HealthStatusRegistry` (inside integration-service) | Remembering the outcome of the last real call per provider/client | Making any call itself — it's a passive record, written to only by `ResilienceGuard` |
+| PostgreSQL | Storing whatever a use case actually chooses to persist — masters, AI drafts | Deciding what gets stored — that's each service's own use-case layer, in Java, never inferred from the schema |
+
+### Data flow — what actually happens when you use the UI, and what (if anything) gets stored
+
+This is worth being blunt about, since it's easy to assume more is wired up than actually is. Table below: an action you can take in the UI today, what happens when you do it, and whether anything reaches a database.
+
+| You do this in the UI | What actually happens | Does it write to a database? |
+|---|---|---|
+| Browse Travel (trip folders, route comparison, journey map) | Reads `tripData.ts` — a static TypeScript array bundled into the app | **No.** Nothing is read from or written to Postgres. This is illustrative data, not your data. |
+| Browse Property (city → area → locality, cost estimator) | Reads `cityData.ts`/`areaData.ts` — same static-array pattern | **No.** Same as above. |
+| Type into a Travel/Property search box | `PlaceAutocomplete` calls `placeSearch.ts`, which searches the *same* static arrays client-side — no network call at all | **No.** This doesn't even reach a backend; it's pure frontend logic. |
+| Open Settings, view currency options / master status | Real `fetch` calls to `travel-service`/`property-service`'s `/masters/currencies` and `/masters/refresh-status` | **Read-only** — reports what's already in `travel.currency`/`property.currency` and `*.master_refresh_log`. Nothing is written by viewing. |
+| Click "Refresh master data" in Settings | `POST /api/{travel|property}/v1/masters/refresh` → `MasterRefreshUseCase` → `integration-service` (GeoNames + Frankfurter) → upserts into `travel.city`/`travel.currency` (or `property.*`) | **Yes — the only UI action in this app that writes real data today.** Upsert-only (§17.1), plus one row appended to `master_refresh_log` per master, every attempt, even on failure. |
+| View the Dashboard's AI-status dots | Real `fetch` to `integration-service`'s `/ai/providers/status`, reading `HealthStatusRegistry` | **No write** — this is a read of in-memory state, not the database, and it doesn't call Ollama/Groq/Mistral either. |
+| (Not yet exposed in any UI) An AI place-suggestion request | `PlaceSuggestionUseCase` calls a real AI provider, then writes the draft | **Yes**, into `integration.ai_suggestion` — but nothing in the UI can trigger this yet; it's only reachable by calling `integration-service`'s endpoint directly. |
+
+The short version: **almost everything you can click today is a read of static frontend data, not a database.** The one exception that both writes to a real table *and* is reachable from the UI is the Settings page's "Refresh master data" button. Everything else described in §16 (trips, property plans, rent history, cost estimates) has real Postgres tables sitting empty, waiting for the CRUD backend that hasn't been built yet (phased plan, item 2).
 
 ---
 
 ## 13. Decision log
 
 Notable calls, newest first — not routine changes. Append a new entry; never rewrite or delete a past one (a reversal gets its own new entry, linked back).
+
+- **2026-09-17 — Confirmed the Docker networking fix worked, then found and fixed a second, real bug: `integration-service`'s credentials were never actually passed into its container.** Live evidence (Frankfurter returning real EUR/USD rates, confirmed in `travel.currency` via the API) proved `INTEGRATION_SERVICE_URL` routing is genuinely fixed. Two remaining gaps, both now fixed: (1) `compose.yaml`'s `integration-service` block never listed `GEONAMES_USERNAME`/`GROQ_API_KEY`/`MISTRAL_API_KEY`/`DATA_GOV_IN_API_KEY` at all — Compose does not forward host/`.env` variables into a container unless a service's own `environment:` block explicitly names them, so these were always unset inside the container regardless of what was in `.env`; added all four (plus their optional model/resource-id overrides) with empty defaults, matching the existing "unset = unconfigured, skip gracefully" pattern. (2) `AED` (in the default tracked-currency list) was live-confirmed **not supported by Frankfurter** — it's ECB-reference-rate-based, and AED isn't part of ECB's published currency set (`GET /v1/currencies` has no AED key) — swapped for `GBP` in both services' `application.yaml` defaults, an honest fix rather than silently letting that one tracked currency fail every run forever. Also added real per-attempt logging inside `integration-service` itself, which had none before this — `ResilienceGuard` now logs INFO/WARN with name, duration, and outcome for every guarded call (success, rate-limited, circuit-open, or failed), and `GeoNamesClient`/`DataGovInClient` log an explicit "skipped — not configured" line when their credential is absent, addressing a real gap: previously only the *caller* side (`travel-service`/`property-service`'s `IntegrationServiceClient`) logged anything, so `integration-service`'s own console showed nothing for a skipped or successful call. *Why:* live diagnostics from real running containers (not guesses) surfaced two genuinely separate root causes hiding behind the same symptom — a credential-passthrough gap and a real free-tier API coverage limit — and a console with no success/skip visibility made every future diagnosis this hard again if left unfixed.
+
+- **2026-09-17 — Diagnosed the Docker networking bug down to root cause (confirmed via real container logs), fixed `compose.yaml`, and expanded master refresh with three network-independent masters while the container-recreation deploy step was still pending.** Real logs from `travel-service`/`property-service` (`ResourceAccessException: I/O error ... baseUrl=http://localhost:8083`) confirmed exactly the hypothesis from the previous entry: `INTEGRATION_SERVICE_URL` was never actually applied to the running containers, even after the `compose.yaml` fix landed on disk — most likely because a long-running `docker compose watch` process, started before that edit, only reacts to source-code changes in its `develop.watch` paths and never re-reads `compose.yaml` itself; recreating requires an explicit `docker compose up -d`. Multiple diagnostic-only reports (confirming the same root cause without applying or verifying the fix) made this take longer to resolve than it should have — the lesson generalized into an explicit instruction to whichever tool applies fixes going forward: paste literal command output, don't summarize "done." Separately, added real, working master refresh for `transport_mode` (travel) and `bhk_type`/`service_addon` (property) — a genuinely different kind of master from `city`/`currency`: fixed categorical label sets with no external source, seeded directly by `MasterRefreshUseCase` with zero network dependency, so they succeed regardless of the `integration-service` connectivity bug. Deliberately did not seed `visa_requirement` (would mean inventing unverified facts, violating §10) or `municipality` (needs a `city_id` FK lookup dependency not yet built). The Settings page needed no frontend changes to display the new masters, since it already renders `GET /masters/refresh-status` generically. *Why:* the user asked for "all masters" on one refresh, and pointed out that repeated diagnosis without a confirmed applied fix wasn't converging — this both closes the gap where genuinely possible right now (categorical-label masters) and is explicit about which masters remain out of scope and why, rather than papering over the ones still blocked on the network fix or an unverified external schema.
+
+- **2026-09-17 — Diagnosed and fixed a real bug: master-data refresh returned only the base currency and zero cities, root-caused to a Docker networking default, not a code defect in the refresh logic itself.** The user reported "only 1 INR came from currency, no cities came." Traced it: `MasterRefreshUseCase.refreshCurrencies()` always upserts the base currency locally regardless of whether the network call succeeded, which is why INR appeared even when everything else failed; `IntegrationServiceClient.findCity()`/`fetchExchangeRates()` (in both `travel-service` and `property-service`) were silently swallowing every exception with no logging, so the real cause was invisible. Root cause, confirmed once `compose.yaml` finished syncing over from the machine actually running this: `travel-service`/`property-service` had no `INTEGRATION_SERVICE_URL` set in their container environment, so both fell back to `application.yaml`'s default (`http://localhost:8083`) — inside a container, `localhost` means "this container itself," not the `integration-service` container, so every master-refresh call failed before it ever left the container. Fixed by adding `INTEGRATION_SERVICE_URL: http://integration-service:8083` to both services' `compose.yaml` environment blocks. Also fixed the invisibility problem itself, independent of this specific bug: added SLF4J WARN logging to both `IntegrationServiceClient`s (logs the target URL and real exception on any failure) and reworded the "seed cities not found" outcome message to stop asserting a specific cause ("not found in GeoNames") when the actual failure mode couldn't be distinguished from "couldn't reach integration-service at all." *Why:* a bug report with no server-side visibility into *why* a call failed is very hard to diagnose remotely — fixing the silent-swallowing matters as much as fixing this one instance, since the next failure (different cause) would otherwise be equally invisible.
+
+- **2026-09-16 — Researched every external API's real rate limit, closed a rate-limiting gap that existed on three of them, and added real "last-hit" health tracking.** Researched (web search, not assumed) and confirmed: GeoNames 1,000 credits/hour; Groq 30 req/min org-wide; Mistral 1 req/**second** org-wide (not per-minute — a per-minute bucket would let a burst blow past this); Frankfurter publishes no hard quota; **data.gov.in publishes no numeric limit anywhere found**, flagged as explicitly unverified rather than guessed with false confidence. Discovered while researching this that `GeoNamesClient`/`FrankfurterClient`/`DataGovInClient` had **zero rate limiting** — only the three AI providers did. Fixed by extracting a new shared `ResilienceGuard` (`adapter/out/resilience`) that wraps any named call with a Resilience4j `RateLimiter` + `CircuitBreaker`, replacing `AiProviderRouter`'s previously bespoke, hand-rolled maps, and applying it uniformly to all six outbound calls (3 AI providers + GeoNames + Frankfurter + data.gov.in) — each with its own config sourced from the table above, expressed as `limitForPeriod`/`refreshPeriodMs` rather than a single "per minute" number specifically so Mistral's sub-second cap can be represented correctly. Added `HealthStatusRegistry`, updated as a side effect of every `ResilienceGuard` call — health is decided by the outcome of the last real call and updated on the next one, never a synthetic ping, per explicit instruction. `GET /api/integration/v1/ai/providers/status` and the new `GET /api/integration/v1/masters/health` now report this real health alongside the existing `configured` flag. Also added `AiProviderRouter.suggestPlacesVerified()` — calls Ollama+Groq in parallel and reports agreement, built exactly per §18's own prior "does more AI mean more accuracy" research, but deliberately **not** called by the default `PlaceSuggestionUseCase` path, since sequential fallback is the only mode the real rate limits above actually support for routine calls. Built the Dashboard's AI-status widget (`features/dashboard/AiStatusWidget.tsx`) — green/red/orange dots, reading the enriched status endpoint, rendering nothing (not an error) if `integration-service` is unreachable. Rewrote §12's status summary, §18's multi-provider section, and the Spring-AI subsection (added an explicit "we don't use it — here's the real code instead" correction, since that had drifted from a recommendation into an implied fact) to match. Added two new subsections under §12 — a responsibility map and a data-flow table stating plainly that almost every UI action today reads static frontend data, and the Settings refresh button is the only one that writes to a real table. Frontend verified (`npm run lint`/`test`/`build` all pass); backend written but **not compiled** — same Java-25-toolchain gap as everything else this session, reconfirmed clean on `integration-service` after this pass. *Why:* explicit ask — verify real limits so free tiers never get blocked, decide health from real traffic, decide sequential-vs-parallel for accuracy, and be honest about what's actually stored where.
+
+- **2026-09-16 — Built the Settings page (§20) and a real, scoped master-data refresh, against the real Postgres schema a parallel session had already stood up.** Read the actual `V2__domain_tables.sql` in `travel-service`/`property-service` first rather than guessing column names, since `spring.jpa.hibernate.ddl-auto: validate` (enabled by the other session) means any mismatch would fail loudly at startup. Added one additive migration per service (`V3__master_refresh_log.sql`: a `master_refresh_log` table plus a natural-key `UNIQUE (name, country_code)` constraint on `city`, needed for `INSERT ... ON CONFLICT` upserts — `currency.iso_code` already had one) rather than editing the already-applied V1/V2. Built `MasterRefreshUseCase` in both domain services, using plain `JdbcTemplate` (not JPA — no entities exist anywhere in this codebase yet, and this is a handful of upsert statements, not a case needing an ORM), calling a new `IntegrationServiceClient` that relays every external call through `integration-service` rather than reaching GeoNames/Frankfurter directly, matching the third-microservice design from the previous session. Added `FrankfurterClient` to `integration-service` (genuinely free, no key) as the currency-rate source. Frontend: `SettingsPage.tsx` renders currency options and master-refresh status entirely from what the backend returns — verified via `npm run lint`/`test`/`build`, all passing, plus a dev-server smoke check that `/settings` serves. Deliberately **did not** attempt property's `area`/`locality`/`pincode` refresh via data.gov.in (its response schema has never been inspected against a real key, and a wrong guess could silently corrupt the location hierarchy with no way to detect it), and did not fabricate a "transactions refresh" since no transaction-creation UI/backend exists yet for anything to pull. *Why:* asked for a Settings tab where "first refresh" pulls master data and nothing in the UI is hardcoded — delivering that honestly meant scoping to the two masters with a genuine, safe, already-researched external source (city via GeoNames, currency via Frankfurter) rather than half-building five masters, three of which have no real refresh source at all.
 
 - **2026-09-16 — Extracted a third microservice, `integration-service`, to hold every external API call; reverted the same code out of `travel-service`/`property-service`.** The AI-provider (Groq/Mistral) and master-data (GeoNames/data.gov.in) code added in the immediately preceding entry had been written directly inside both domain services — on reflection, a reasonable but avoidable duplication, since neither service's job is "talk to Groq," and both would otherwise carry a second, identical copy of every provider client and Resilience4j wrapper. Deleted `adapter/out/ai`, `adapter/out/geonames`, `adapter/out/datagovin`, `ExternalApisProperties`, `AiProvider`, `AiProviderStatusController`, and `MasterLookupController` from both services; reverted `PlaceKind`, `PlaceSearchUseCase`, `PlaceSearchUseCaseTest`, each `*Application.java`, `build.gradle` and `application.yaml` back to their state before that entry — confirmed via `find` that both services' file trees now match exactly. Built `integration-service` from scratch at the repo root as a genuine third microservice, following the same conventions as the other two exactly: own `settings.gradle`/`build.gradle`/Gradle wrapper (copied, not reinvented), same Spring Boot 4.1.1 + Java 25 toolchain, same `domain`/`application`/`adapter.in.web`/`adapter.out.*`/`config` hexagonal layering, same `ServiceInfoController`/`OpenApiConfig` pattern, port `8083` (`INTEGRATION_PORT`), base path `/api/integration/v1`. It deliberately omits `adapter.out.persistence` and the JPA/Flyway/Postgres/H2 dependencies the other two carry — it owns no bounded-context schema, so those would be dead weight, not consistency. Moved `AiProviderRouter`/`GroqAiProvider`/`MistralAiProvider`/`GeoNamesClient`/`DataGovInClient` into it as-is, added a new `PlaceSuggestionUseCase` + `PlaceSuggestionController` (`GET /api/integration/v1/ai/place-suggestions?q=`) as its application-layer entry point, plus `AiProviderStatusController` and `MasterLookupController`, and one JUnit 5 test class. `README.md`, `scripts/start-local.sh`, and `docs/agent-context/CURRENT-STATE.md` updated to list the third service alongside the other two. **`travel-service`/`property-service` do not yet call `integration-service` over HTTP** — that cross-service wiring is designed (§18 diagram) but not built, an honest gap, not an oversight. Reconfirmed `./gradlew compileJava --offline` fails identically (missing JDK 25 toolchain only, no dependency-resolution errors) on all three services after this restructuring. *Why:* explicit ask — "create a third microservice... shift all the external APIs calling logic... in that particular microservice," on the reasoning that a dedicated integration layer is better architecture than duplicating outbound-call code into two domain services that shouldn't need to know how to talk to Groq.
 - **2026-09-16 — Implemented all four external API integrations from §22 as real, credential-driven code, written but not compiled on this machine.** Added to both services: `GroqAiProvider` and `MistralAiProvider` (`adapter/out/ai`), calling each provider's actual OpenAI-compatible chat-completions endpoint via Spring's `RestClient`, and `AiProviderRouter`, which tries them in priority order (Groq, then Mistral), skipping any with no API key configured and falling through to the next on failure — wrapped per-provider in a hand-constructed Resilience4j `RateLimiter` + `CircuitBreaker` from the framework-core modules (`resilience4j-ratelimiter`/`resilience4j-circuitbreaker`), not the Spring Boot starter/autoconfig module, whose Boot-4.1 compatibility couldn't be verified here. `PlaceSearchUseCase` (built in the previous pass) now calls this router as its real AI fallback when local search finds nothing — results come back tagged `AI_SUGGESTION` with an explicit unverified disclaimer, never merged with real matches. Also added `GeoNamesClient` (both services) and `DataGovInClient` (property-service), thin `RestClient` wrappers over the free APIs researched and account-registered in §22, each reading its credential from an environment variable (`GEONAMES_USERNAME`, `DATA_GOV_IN_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY` — names only, never values, documented in §22's new table) and returning an empty result rather than throwing when unset. Neither is wired to a scheduled master-refresh job yet, since that needs real persistence this pass deliberately left out; each instead gets a manual-trigger debug endpoint (`MasterLookupController`) so the integration is genuinely callable and provable today. New `AiProviderStatusController` (`GET /api/{travel|property}/v1/ai/providers/status`) reports which providers are configured via a config check, not a live ping, so it costs no API quota. Added `ExternalApisProperties` (`@ConfigurationProperties(prefix = "app")`, records, bound via `@ConfigurationPropertiesScan` on each `*Application` class) as the single place `application.yaml`'s `${ENV_VAR}` placeholders resolve into. **Could not compile or run** — reconfirmed via `./gradlew compileJava --offline` on both services, which still fails only on the known missing-JDK-25-toolchain error, with no dependency-resolution errors for the two new Resilience4j coordinates; every file was instead hand-reviewed for syntax. *Why:* explicitly asked to implement every external API integration discussed, using whatever keys already exist, while still leaving the actual database out — reading credentials from environment variables and keeping every client's absence-of-key path harmless (empty result, not a crash) makes that possible without ever needing to see, store, or commit an actual secret value.
@@ -494,9 +550,9 @@ Notable calls, newest first — not routine changes. Append a new entry; never r
 Not commitments — the honest answer to "how would this grow." Nothing here is scheduled; see [docs/roadmap.md](docs/roadmap.md) for what's actually planned.
 
 - **Multiple users:** add an owner/tenant id to `TripPlan`/`PropertyPlan` and an auth adapter behind a port — domain logic untouched.
-- **More bounded contexts:** a third domain follows the same recipe — its own service, schema, ADR, never a shared table.
+- **More bounded contexts:** a third *business* domain follows the same recipe — its own service, schema, ADR, never a shared table. (`integration-service`, added 2026-09-16, isn't an instance of this — it's an integration layer with no business domain of its own, not a fourth bounded context; see [§18](#18-ais-role-in-this-application).)
 - **Real deployment:** swap the dev proxy for a reverse proxy, point at managed PostgreSQL — a config/adapter change, not a redesign.
-- **Heavier AI:** the `AiProvider` port has room for a second, paid adapter, opt-in, same draft-and-approve rules.
+- **Heavier AI:** ~~the `AiProvider` port has room for a second, paid adapter, opt-in, same draft-and-approve rules~~ — **built**, 2026-09-16: `integration-service` already has three (Ollama, Groq, Mistral) behind exactly this port, with the draft-and-approve `ai_suggestion` table live. What's still ahead: LLM ensembling for higher-stakes drafts (§18's "does more AI mean more accuracy" section) and wiring the fallback into `travel-service`/`property-service`'s own search.
 - **Search:** `pgvector` is the documented next step if PostgreSQL full-text search isn't enough — not installed until measured need exists.
 - **Data volume:** append-only snapshots grow over time; retention policy is a known future task, not an emergency.
 
@@ -516,7 +572,7 @@ What's actually been built, one chapter per capability, in build order. Unlike t
 
 **15.3 — Entry gate.** *What:* a full-screen "enter the app" moment on every fresh load (age-gate framing, not real verification) — a soft ambient light effect, a confetti burst on "Enter," then the Dashboard. *How:* `components/EntryGate.tsx` always renders `children` underneath and overlays itself with `fixed inset-0 z-50`, fading out rather than unmount/remount-swapping (that sequencing was the fix for an earlier white-flash bug). No `localStorage` — a fresh page load always shows it, since it wraps the router and in-app navigation never remounts it. *Template for:* any future full-screen overlay that needs to sit above the whole app without disturbing what's underneath.
 
-**15.4 — Dashboard.** *What:* the hero statement, plus a "Last checked" recap linking back to the last-opened trip/city, if any. *How:* `pages/dashboard/DashboardHero.tsx` + `RecentlyChecked.tsx`, reading from `lib/lastAccessed.ts` (a small generic localStorage helper, `section: 'travel' | 'property'`). `layout/AppShell.tsx` is route-aware — the Dashboard (`/`) alone is pinned to one viewport height with no scroll, everything else scrolls normally. *Template for:* `lastAccessed` is reused as-is by Property; any future "recently viewed X" feature follows the same read/record pair.
+**15.4 — Dashboard.** *What:* the hero statement, a "Last checked" recap linking back to the last-opened trip/city, and (since 2026-09-16) a compact **AI-model status row** below both — one dot per provider (Ollama/Groq/Mistral), green/red/orange. *How:* `pages/dashboard/DashboardHero.tsx` + `RecentlyChecked.tsx`, reading from `lib/lastAccessed.ts` (a small generic localStorage helper, `section: 'travel' | 'property'`); `features/dashboard/AiStatusWidget.tsx` calls `integration-service`'s `GET /api/integration/v1/ai/providers/status` directly (the first place `lifestyle-web` calls `integration-service`, not just `travel`/`property`) and renders nothing at all — not an error, just nothing — if that service isn't reachable, so a missing backend never breaks the Dashboard. `layout/AppShell.tsx` is route-aware — the Dashboard (`/`) alone is pinned to one viewport height with no scroll, everything else scrolls normally; the status row is deliberately one compact line to respect that. *Template for:* `lastAccessed` is reused as-is by Property; any future "recently viewed X" feature follows the same read/record pair. Verified: `npm run lint`/`test`/`build` all pass; not verified against a running `integration-service` (§12).
 
 **15.5 — Travel: trip folders, route comparison, journey map.** *What:* `/travel` lists trip folders (double-click to open) plus a "Did you know" facts pod; a trip's detail page shows route alternatives (e.g. via Mumbai vs. via Delhi) with a per-leg mode picker (flight/train/road, each with fare + duration), a sort-by-cheapest/fastest control that auto-picks the best option per leg, a running total, an illustrated journey-map trail, and an optional (hidden by default) itinerary. *How:* static data in `features/travel/tripData.ts`; `components/RouteComparison.tsx` + `LegPicker.tsx` + `RouteCompareStrip.tsx` + `JourneyMap.tsx` + `ItinerarySection.tsx`, all under `features/travel/components/`, each single-purpose per [§10](#10-non-negotiable-engineering-rules)'s file-organization ask. *Template for:* §15.6 below reuses this same folder → detail → drill-down shape for Property; a future "AI Planner" surfacing a draft itinerary would plug into the same `ItinerarySection`-style optional-reveal pattern.
 
@@ -528,7 +584,7 @@ What's actually been built, one chapter per capability, in build order. Unlike t
 
 ## 16. Planned backend data model — masters, transactions, audit
 
-Everything in this section is **design, not built** — the frontend's static `tripData.ts`/`cityData.ts`/`areaData.ts` ([§3.3](#33-content-taxonomy)) already mirror this shape closely, so wiring them to a real backend later is meant to be a data-source swap, not a redesign. Both services keep their own copy of every table — per [ADR-003](docs/decisions/ADR-003-single-postgres-separate-schemas.md) there is no cross-schema FK, so even a "shared" master like `city` or `currency` is duplicated per schema, each refreshed independently ([§17](#17-master-data-lifecycle)).
+**Update, 2026-09-16: the schema below is no longer just design — it's real DDL.** Every table described in this section exists in Postgres today, created by Flyway (`V1__phase1_marker.sql` + `V2__domain_tables.sql` in both `travel-service` and `property-service`). What's still true to the word "planned": almost none of it has application code reading or writing it yet. The two exceptions are `city`/`currency` (upserted by `MasterRefreshUseCase`, §20) and, in `integration-service`, an AI-draft-provenance table shaped like `ai_suggestion`/`ai_recommendation` below (§18). Everything else — `trip_plan`, `route_option`, `trip_leg`, `leg_price_quote`, `property_plan`, `rent_snapshot`, `cost_estimate`, and the rest — is real, migrated, and untouched by any use case. The frontend's static `tripData.ts`/`cityData.ts`/`areaData.ts` ([§3.3](#33-content-taxonomy)) already mirror this shape closely, so wiring them to this now-real backend is meant to be a data-source swap, not a redesign. Both services keep their own copy of every table — per [ADR-003](docs/decisions/ADR-003-single-postgres-separate-schemas.md) there is no cross-schema FK, so even a "shared" master like `city` or `currency` is duplicated per schema, each refreshed independently ([§17](#17-master-data-lifecycle)).
 
 **The three kinds of table, defined once, reused for both contexts:**
 
@@ -639,6 +695,8 @@ A real, granular fact like "does Aundh actually have any 4BHK inventory" belongs
 - **Scheduled** — later, Spring's built-in `@Scheduled` (free, no new infrastructure — no Kafka/cron service needed) runs the same refresh logic periodically. Cadence matches how often the real data actually changes: currencies daily, city/pincode masters monthly-ish, visa requirements on a much longer, manually-reviewed cycle since no reliable free live source exists for them.
 
 Both triggers call the same `MasterRefreshJob` per master type — one small port/adapter per master (`CurrencyRefreshJob`, `CityMasterRefreshJob`, `PincodeMasterRefreshJob`, …), each knowing how to pull its one external source and upsert into its master table. A `master_refresh_log` row is written every run (`master_type, started_at, completed_at, records_upserted, status, error_message`) — this is what the Settings screen shows as "last refreshed."
+
+**Built so far (§20) is a smaller, honest first slice of this design, not the whole thing:** one `MasterRefreshUseCase` per service refreshing `city` + `currency` together behind a single `POST /api/{travel|property}/v1/masters/refresh` (not yet split into one job/endpoint per master type), on-demand only (no `@Scheduled` yet), logging to a real `master_refresh_log` table (column named `master_name`, not `master_type`, but otherwise this exact shape). `pincode`/`transport_mode`/visa data are not refreshed at all yet — see the gap called out below and in §20.
 
 **Free sources for the masters that actually have one:**
 
@@ -779,40 +837,67 @@ This is [docs/ai-capability-roadmap.md](docs/ai-capability-roadmap.md)'s item 1 
 
 ### Where the external API calls actually live: `integration-service`
 
-An earlier pass in this same session put `GroqAiProvider`/`MistralAiProvider`/`AiProviderRouter`/`GeoNamesClient`/`DataGovInClient` directly inside `travel-service` and `property-service`. On reflection this meant duplicating every provider client and every Resilience4j wrapper in two places for no reason — neither service's actual job is "talk to Groq." That code was reverted, and a **third microservice, `integration-service`**, was built to hold it instead — same Gradle/Spring Boot conventions, same `domain`/`application`/`adapter`/`config` hexagonal layering as the other two, running on its own port (`8083`, `INTEGRATION_PORT`). It is deliberately the odd one out in one respect: it owns no bounded-context schema of its own (no `adapter/out/persistence`, no JPA/Flyway/Postgres dependency in its `build.gradle`) — its only job is holding every outbound call to an external system behind a small set of ports and adapters, so `travel-service` and `property-service` stay focused on their own domains.
+An earlier pass in this same session put `GroqAiProvider`/`MistralAiProvider`/`AiProviderRouter`/`GeoNamesClient`/`DataGovInClient` directly inside `travel-service` and `property-service`. On reflection this meant duplicating every provider client and every Resilience4j wrapper in two places for no reason — neither service's actual job is "talk to Groq." That code was reverted, and a **third microservice, `integration-service`**, was built to hold it instead — same Gradle/Spring Boot conventions, same `domain`/`application`/`adapter`/`config` hexagonal layering as the other two, running on its own port (`8083`, `INTEGRATION_PORT`). Its role is narrower than the other two: it owns no *business* schema like Travel's or Property's — no `trip_plan`, no `property_plan` — its only job is holding every outbound call to an external system behind a small set of ports and adapters. It does, since a parallel-machine session's update, have one small table of its own (`integration.ai_suggestion`, below) purely to track AI-draft provenance, not domain data.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background':'transparent','fontFamily':'Trebuchet MS, Verdana, sans-serif','fontSize':'15px','lineColor':'#5eead4'}, 'flowchart': {'curve': 'stepAfter'}}}%%
 flowchart LR
-    T["travel-service<br/>PlaceSearchUseCase"]
-    P["property-service<br/>PlaceSearchUseCase"]
+    T["travel-service"]
+    P["property-service"]
     I["integration-service"]
+    O(["Ollama"])
     G(["Groq"])
     M(["Mistral"])
     GN(["GeoNames"])
+    F(["Frankfurter"])
     D(["data.gov.in"])
 
-    T -.->|"not yet wired — designed"| I
-    P -.->|"not yet wired — designed"| I
+    T -->|"master refresh — live"| I
+    P -->|"master refresh — live"| I
+    T -.->|"AI fallback — not yet wired"| I
+    P -.->|"AI fallback — not yet wired"| I
+    I --> O
     I --> G
     I --> M
     I --> GN
-    I --> D
+    I --> F
+    I -.->|"manual endpoint only"| D
 
     classDef svc fill:#334155,stroke:#94a3b8,color:#f1f5f9,stroke-width:2px,rx:10,ry:10;
     classDef ext fill:#b45309,stroke:#fde68a,color:#fffbeb,stroke-width:2px,rx:10,ry:10;
     class T,P,I svc;
-    class G,M,GN,D ext;
+    class O,G,M,GN,F,D ext;
 ```
 
-What `integration-service` contains, moved as-is from the reverted code:
+What `integration-service` contains today:
 
-- **`AiProviderRouter`** (`adapter/out/ai`) tries **Groq then Mistral** (`GroqAiProvider`/`MistralAiProvider`, both calling their real OpenAI-compatible chat-completions endpoint via `RestClient`), wrapped per-provider in a hand-constructed Resilience4j `RateLimiter` + `CircuitBreaker` (core library, not the Spring Boot starter module — its Boot-4.1 compatibility couldn't be verified here), skipping any provider with no API key configured and falling through to the next on any failure.
-- **`PlaceSuggestionUseCase`** wraps the router as the application-layer entry point, exposed via `GET /api/integration/v1/ai/place-suggestions?q=` — results always carry an explicit "unverified" disclaimer (§10, AI never authoritative), never claimed as real data.
-- **`GeoNamesClient`** and **`DataGovInClient`** (`adapter/out/geonames`, `adapter/out/datagovin`), thin `RestClient` wrappers over the free APIs researched in §22, each reading its credential from an environment variable and returning an empty result — never throwing — when unset. Exposed via manual-trigger endpoints (`GET /api/integration/v1/masters/geonames/search?q=`, `GET /api/integration/v1/masters/datagovin/sample`) since there's no scheduled refresh job or master table to wire them into yet.
-- **`GET /api/integration/v1/ai/providers/status`** reports which providers are configured — a config check, not a live ping, so it costs no quota.
+- **`AiProviderRouter`** (`adapter/out/ai`) tries **Ollama, then Groq, then Mistral** — Ollama first since it's local/free/private, the two cloud providers as fallback (`OllamaAiProvider`/`GroqAiProvider`/`MistralAiProvider`, the cloud two calling their real OpenAI-compatible chat-completions endpoint via `RestClient`), wrapped per-provider in a hand-constructed Resilience4j `RateLimiter` + `CircuitBreaker` (core library, not the Spring Boot starter module — its Boot-4.1 compatibility couldn't be verified here), skipping any provider with no configuration and falling through to the next on any failure. Returns a `RoutedSuggestion(suggestions, provider, model)` record, not a bare list — so callers know *which* provider actually answered.
+- **`PlaceSuggestionUseCase`** wraps the router as the application-layer entry point, exposed via `GET /api/integration/v1/ai/place-suggestions?q=`. Since the parallel-machine update, every successful suggestion is also persisted — a real Postgres write via `JdbcAiSuggestionRepository` into `integration.ai_suggestion` (`V1__ai_suggestion.sql`), the same `provider`/`model`/`prompt_version`/`verification_status`/`acceptance_status` DRAFT-lifecycle shape as `travel.ai_suggestion`/`property.ai_recommendation` in §16 — this is real, working AI-draft provenance tracking, not a placeholder. Results always carry an explicit "unverified" disclaimer (§10, AI never authoritative) regardless.
+- **`GeoNamesClient`** — genuinely live now, not just a manual endpoint: `travel-service`/`property-service`'s `MasterRefreshUseCase` (§20) calls it through `GET /api/integration/v1/masters/geonames/search?q=` to refresh their own `city` master.
+- **`FrankfurterClient`** (new, no key needed) — same story: called live by both services' `MasterRefreshUseCase` through `GET /api/integration/v1/masters/frankfurter/latest?base=&symbols=` to refresh their `currency` master.
+- **`DataGovInClient`** — still manual-trigger only (`GET /api/integration/v1/masters/datagovin/sample`); its dataset's exact response shape has never been inspected against a real key/response, so no refresh job consumes it yet (§20).
+- **`GET /api/integration/v1/ai/providers/status`** and **`GET /api/integration/v1/masters/health`** report each provider/client's `configured` flag *and* real health — see below.
 
-**Not yet wired end to end.** `travel-service`/`property-service` do **not** currently call `integration-service` over HTTP — that cross-service call (an `IntegrationServiceClient` in each `PlaceSearchUseCase`, replacing the plain notice string with a real suggestion once local search finds nothing) is the natural next step, designed above but not built, so it isn't claimed as done. `InMemoryPlaceRepository` and the frontend's `placeSearch.ts` are hand-kept in sync (same city/area/locality/trip-leg fixture values) since there's no shared package between a Java backend and a TypeScript frontend to enforce it automatically. **Not compiled or run** — this machine has Java 8 (and a Java 17 install at `D:\jdk-17.0.6` that also doesn't satisfy the project's Java 25 toolchain requirement); `./gradlew compileJava --offline` fails cleanly on all three services asking for a JDK 25 toolchain rather than downloading one, with no dependency-resolution errors for `integration-service`'s Resilience4j coordinates beyond that toolchain gap. Verify by building on a machine with JDK 25 before trusting any of this compiles. The "via" route-suggestion drafting (a still-separate idea from ad-hoc place suggestions) remains design-only.
+### Rate limiting, health, and accuracy — updated 2026-09-16 with real researched numbers
+
+**Every outbound call in `integration-service` — AI or not — now goes through one shared component, `ResilienceGuard`** (`adapter/out/resilience`), instead of `AiProviderRouter` hand-rolling its own `RateLimiter`/`CircuitBreaker` maps while `GeoNamesClient`/`FrankfurterClient`/`DataGovInClient` had none at all (a real gap this pass closed — those three previously had zero rate limiting). `ResilienceGuard.call(name, config, action, fallback)` wraps any call with a named Resilience4j `RateLimiter` + `CircuitBreaker` pair and, as a side effect of every call, updates a `HealthStatusRegistry` entry for that name.
+
+**Every limit below is that provider's own published number, researched 2026-09-16, with a safety margin — except one, flagged honestly:**
+
+| Provider / client | Published limit (source) | This app's cap |
+|---|---|---|
+| GeoNames | 1,000 credits/hour, 10,000/day ([geonames.org/export/credits.html](https://www.geonames.org/export/credits.html)) | 10 req/min (≈600/hr) |
+| Groq | 30 requests/minute, org-wide, per model | 25 req/min |
+| Mistral | **1 request/second**, org-wide (Mistral's own help center) | 1 req per 1.2s — deliberately *not* expressed as "60/min," since a per-minute bucket would let a burst blow straight past a real per-second cap in the first second of every window |
+| Frankfurter | No published quota — its own docs say "soft fair-use limits, no monthly/daily caps" | 20 req/min (a self-imposed courtesy cap, not something Frankfurter enforces) |
+| data.gov.in | **No numeric limit published anywhere found**, after a real search — flagged as genuinely unverified, not guessed with false confidence | 10 req/min (a conservative placeholder; tighten or loosen once a real number surfaces) |
+| Ollama | None — local, concurrency-bound not request-bound | 60 req/min (pure safety valve against a runaway loop, not a real external constraint) |
+
+**Health is decided by the last real hit, updated by the next one — never a synthetic ping**, exactly as designed: `ResilienceGuard` records `UP` on any successful call and `DOWN` (with a reason — rate limited / circuit open / the actual exception message) on any failure, for whichever provider or client just got called. `HealthStatusRegistry` is a simple in-memory map, per process, reset on restart — that's the right scope for "is this working right now," not a persisted audit trail (`integration.ai_suggestion`, above, is what actually persists). The status endpoints just read this map; they never themselves call an external API, so checking status is always free and instant, regardless of whether a provider is actually reachable at that moment. The Dashboard's AI-status widget (§15.4) consumes exactly this: green = `UP`, red = `DOWN`, orange = not configured or never called yet.
+
+**Sequential fallback stays the default; parallel cross-checking is available but deliberately unused by default.** `AiProviderRouter.suggestPlaces()` — the only method `PlaceSuggestionUseCase` actually calls — remains strictly sequential (Ollama → Groq → Mistral, stop at the first success), because that's the only mode compatible with the tight, real limits in the table above: calling all three in parallel for every ordinary place-name suggestion would burn 3× the quota for a low-stakes answer. A second method, `AiProviderRouter.suggestPlacesVerified()`, calls **Ollama and Groq in parallel** (Mistral deliberately excluded — its 1/sec ceiling is the tightest of the three, not worth spending on routine cross-checks) and reports whether they agree. This exists and is tested but **is not called by anything yet** — it's held in reserve for exactly the case §18's own research above already identified as the one place parallel verification is worth its cost: a future high-stakes structured-extraction draft (phased-plan item 7), never routine suggestions. This is the concrete decision asked for: **priority order (sequential) for everything today; parallel only for a specific future high-stakes feature, not as a general default.**
+
+**Partially wired now, not fully.** As of the Settings/master-refresh feature (§20), `travel-service`/`property-service` **do** call `integration-service` over HTTP — for master-data refresh (GeoNames, Frankfurter), via a new `IntegrationServiceClient` in each service. What's still **not** wired: `PlaceSearchUseCase`'s AI fallback still only returns the honest `AI_FALLBACK_NOTICE` string — it does not yet call `PlaceSuggestionController` for a real AI-drafted suggestion when local search finds nothing. That specific call remains the next step. `InMemoryPlaceRepository` (backing place *search*, not the *master* table `MasterRefreshUseCase` now actually populates — see §20's note on that gap) and the frontend's `placeSearch.ts` are hand-kept in sync (same city/area/locality/trip-leg fixture values) since there's no shared package between a Java backend and a TypeScript frontend to enforce it automatically. **Not compiled or run** on this machine — Java 8 here (plus an unrelated Java 17 install at `D:\jdk-17.0.6`), neither satisfying the project's Java 25 toolchain requirement; `./gradlew compileJava --offline` fails cleanly on all three services asking for a JDK 25 toolchain rather than downloading one, reconfirmed after every pass this session including the master-refresh work, with no dependency-resolution errors beyond that gap. Verify by building on a machine with JDK 25 before trusting any of this compiles. The "via" route-suggestion drafting (a still-separate idea from ad-hoc place suggestions) remains design-only.
 
 This is a real, well-scoped feature, and it maps cleanly onto everything already designed: a search box for Travel's from/to fields and Property's location search, checking **the database first, AI only when nothing local matches.**
 
@@ -887,6 +972,8 @@ The tables above cover which AI *provider* to call. This is the different questi
 
 **Frontend — deliberately not adopting the Vercel AI SDK.** It's the genuine React-ecosystem standard for AI chat UIs (`useChat`, streaming, provider-agnostic), but its whole design assumes the AI call happens in a Node.js/Next.js server function calling the provider directly. This project's rule is stricter: **AI only ever runs behind the Spring Boot backend's `AiProvider` port, never client-side, never from the browser** — that boundary is what makes provenance, approval, and the DRAFT/ACCEPTED pattern enforceable at all. Pulling in a library built around a different backend shape would mean fighting it, not using it. If a future feature needs streaming AI output in the UI, the right move is a small custom React hook reading a Server-Sent-Events endpoint from *our own* backend — the same UX pattern `useChat` provides, without adopting an SDK built for someone else's architecture.
 
+**So where does this project actually use Spring AI? Nowhere — direct answer, since this comes up.** Everything above was written as a *recommendation* before `integration-service` existed. When `GroqAiProvider`/`MistralAiProvider`/`OllamaAiProvider`/`AiProviderRouter` were actually built (§18 below), **plain Spring `RestClient` calls were used instead — no `spring-ai-*` dependency is in any `build.gradle` in this repo.** This wasn't a silent reversal of the recommendation above; it's a scope call: Groq, Mistral, and Ollama's chat-completions APIs are all OpenAI-compatible JSON-over-HTTP — one POST, one prompt string, parse a comma-separated reply — genuinely simple enough that hand-writing the `RestClient` call was faster to get right and easier to verify by reading, especially given every line of this project's backend has had to be verified by eye rather than compiled (§12). Adding Spring AI's `ChatClient` + provider-specific starter dependencies would have meant more unverified dependency-resolution risk for a call this simple. **The recommendation above still stands as the honest answer for when it *would* earn its place**: structured output (typed Java objects instead of parsing a comma-separated string by hand) becomes worth it the moment a real feature needs the model to fill a whole `AiSuggestion`-shaped record (§16) instead of a flat list of strings — i.e. item 7 in the [phased plan](#21-phased-plan), not before.
+
 ### Multiple AI providers — the full architecture
 
 Ollama (local), Groq, and Mistral are all set up now ([§22](#22-account-setup-checklist--whats-needed-from-you-one-at-a-time)). Here's how they fit together, not just as three separate options but as one system:
@@ -934,6 +1021,8 @@ flowchart TB
 - **Rate limiting is per-provider, reusing [§17.3](#173-what-happens-when-a-refresh-call-fails)'s Resilience4j pattern exactly** — a `RateLimiter` configured to each provider's actual documented free-tier ceiling (Groq's ~30 req/min, Mistral's ~1 req/sec), so this app never exceeds a quota and gets itself blocked. Same library, same reasoning, now applied to AI calls instead of master-data refreshes — the generic-over-bespoke rule in action.
 - **The status widget is a Spring Boot Actuator pattern, not a custom mechanism:** one small `HealthIndicator` per provider (a cheap ping/test call, not a real generation request), aggregated the same way Actuator already aggregates `/actuator/health` — the Dashboard widget just polls a small `/ai/providers/status` endpoint built on that. "Refresh" re-runs the checks on demand, the same on-demand/scheduled pattern as master refreshing in [§17](#17-master-data-lifecycle). Kept deliberately light on the Dashboard, per its own one-viewport rule ([§15.4](#15-functionality-chapters)) — a compact row of provider name + status dot, not a full panel.
 
+**Built vs. this diagram, precisely — updated again 2026-09-16:** the fallback order (Ollama → Groq → Mistral) is real. Rate limiting/circuit breaking are real but no longer hand-rolled per-class — both now go through the shared `ResilienceGuard` described just above, with per-provider limits sourced from each provider's own published number (see the table there), not the rounded "~30/min, ~1/sec" figures this diagram used when first drawn. One thing in this diagram remains aspirational: there's still no separate `Retry` component (just the rate limiter + circuit breaker — retrying a rate-limited call immediately would just get rate-limited again). The status endpoint is **no longer** a config-only check as an earlier version of this note said: `GET /api/integration/v1/ai/providers/status` now also reports real health (`ResilienceGuard`-recorded, from the last actual call — never a fresh `HealthIndicator`-style ping, which would cost quota just to render a dot), and the Dashboard widget (§15.4) does consume it now, rendering a green/red/orange dot per provider.
+
 ### Does using multiple AIs actually mean more accuracy? — corrected, with sources
 
 Not automatically — worth being precise about what it does and doesn't buy:
@@ -943,6 +1032,8 @@ Not automatically — worth being precise about what it does and doesn't buy:
 - **Where it's worth doing here, specifically:** only for the highest-stakes draft — structured trip/route extraction ([§18](#18-ais-role-in-this-application)'s Mumbai→Kerala scenario) — call two providers, and if they extract different cities/legs, flag that specific field as "models disagreed, please double-check" in the review UI, rather than silently picking one. That's a targeted use of ensembling where the cost is worth it, not a blanket "always call every provider" policy that would burn through three separate free-tier quotas for every single AI action in the app.
 
 So: you weren't wrong that it can help, just that it's not automatic — it has to be a deliberate design choice on a specific, worthwhile task, not "more providers configured = more accurate by default."
+
+**This is now a real method, not just a paragraph.** `AiProviderRouter.suggestPlacesVerified()` (2026-09-16) calls Ollama and Groq in parallel and reports whether they agree — built exactly per the reasoning above, and exactly as unused by default: `PlaceSuggestionUseCase` still calls the plain sequential `suggestPlaces()`. It's there, tested, ready for whichever future feature is the first genuinely high-stakes draft — not switched on generally.
 
 ---
 
@@ -968,19 +1059,30 @@ A new `/settings` page, kept deliberately small — no account/profile/name fiel
 
 Nothing else belongs here yet — this list grows only when a real, working setting needs a home, not speculatively.
 
+**Built, 2026-09-16 — real code across all four apps, none of it hardcoded, none of it verified to run on this machine.** `lifestyle-web/src/features/settings/SettingsPage.tsx` (route `/settings`, linked from `Nav.tsx`) renders two things, both dynamic:
+
+- **Currency selector** — options come from `GET /api/{travel|property}/v1/masters/currencies`, i.e. whatever's actually in the `currency` table right now; the page renders nothing hardcoded and shows an honest "no currencies loaded yet" state if that table is empty. Selection is saved via `lib/currencyPreference.ts` (localStorage, same lightweight pattern as `lastAccessed.ts` — a browser preference, not an account setting, matching this page's "no accounts" rule).
+- **Master data + Refresh button** — `GET /api/{travel|property}/v1/masters/refresh-status` renders each master's live record count and last-refresh time/status straight from Postgres (`master_refresh_log`, added in a new `V3__master_refresh_log.sql` migration in both services — additive, doesn't touch the already-applied V1/V2). The button calls `POST /api/{travel|property}/v1/masters/refresh` on both services, which runs `MasterRefreshUseCase`: pulls the `city` master from GeoNames and the `currency` master from Frankfurter — both **through `integration-service`**, via a new `IntegrationServiceClient` in each domain service, never called directly — and upserts each into Postgres via `INSERT ... ON CONFLICT DO UPDATE` (a natural-key uniqueness constraint on `city(name, country_code)` was added in the same V3 migration; `currency.iso_code` already had one). Every refresh attempt is logged even on failure (§17.3) — nothing here silently does nothing. `integration-service` gained one new external integration for this: `FrankfurterClient` (genuinely free, no key — §22.1), exposed at `GET /api/integration/v1/masters/frankfurter/latest?base=&symbols=`.
+
+**Expanded 2026-09-17 — `transport_mode` (travel), `bhk_type` and `service_addon` (property) now also refresh, with zero network dependency.** These are a genuinely different kind of master from `city`/`currency`: fixed, closed sets of categorical labels (flight/train/road; 1RK–Villa; tiffin/gym) with no external source to fetch from at all — there's nothing to look up, so `MasterRefreshUseCase` seeds them directly and always reports `SUCCESS`, since no network call is involved. This means these three now populate correctly on every refresh **regardless of whatever's happening with `integration-service`'s reachability** — a real, working improvement independent of the Docker networking bug being chased in the decision log below. The Settings page needed **zero frontend changes** to show them: it already renders whatever `GET /masters/refresh-status` returns, generically, with no hardcoded list of master names.
+
+**Still not refreshed, and why — this remains a deliberate scope boundary, not an oversight.** Property's `area`/`locality`/`pincode` masters are designed to come from data.gov.in's pincode-directory dataset (§17, §22.2) but are **not** wired into this refresh — that dataset's exact JSON response shape has never been inspected against a real key/response, and guessing it wrong risks silently mis-mapping the area→locality→pincode hierarchy with no way to catch it. `visa_requirement` and `municipality` still have no seed either: visa rules are asserted facts (inventing placeholder ones would violate §10's "never assert an unverified fact" rule, unlike a plain categorical label like "Flight"), and `municipality` rows need a `city_id` foreign key, adding a real ordering dependency (city must be upserted and looked up first) that hasn't been built yet. **"Transactions get pulled on first refresh too"** was part of the original ask — honestly, there's nothing to pull yet: no CRUD UI or backend exists for `trip_plan`/`route_option`/`property_plan` (§21's phased plan puts that after masters), so a transaction-refresh has no real data to operate on until that's built.
+
+**Not verified end to end.** Every backend file above is written but not compiled — same Java-25-toolchain gap as everything else this session (`./gradlew compileJava --offline` reconfirmed clean on all three services after these changes). The frontend half **is** verified — `npm run lint`, `npm test`, `npm run build` all pass, and the `/settings` route serves correctly from the dev server — but only against a backend that isn't running here, so its honest connection-error states (rather than the real success path) are what's actually been exercised. Also added: `spring.datasource`/`jpa`/`flyway` were already enabled in `travel-service`/`property-service` `application.yaml` by a parallel session on another machine (real Postgres schemas `travel`/`property`/`integration` already exist there) before this feature was built — this feature was written against that real schema (the exact column definitions in `V2__domain_tables.sql`), not guessed.
+
 ---
 
 ## 21. Phased plan
 
 Not a commitment, not scheduled — an honest sequencing of everything above, so the next real decision has an order to slot into. See [docs/roadmap.md](docs/roadmap.md) for what's officially planned next; this is the more detailed version of the same idea for backend/AI work specifically.
 
-1. **Masters first, minimal set.** `country`, `city`, `currency` (Travel + Property, each schema's own copy) — pull once from GeoNames/REST Countries/Frankfurter, verify the refresh mechanism works before building anything on top of it.
-2. **Transaction tables, matching the frontend's existing shape.** `trip_plan`/`route_option`/`trip_leg` and `property_plan`/`cost_estimate` — deliberately designed to match `tripData.ts`/`cityData.ts`/`areaData.ts` already, so the frontend swaps its data source rather than being rebuilt.
-3. **Audit logging from day one of transaction tables** — cheaper to build in from the start than retrofit.
-4. **Manual price/rent entry UI**, since no free live source exists for either — a form backed by `leg_price_quote`/`rent_snapshot`, append-only.
-5. **Master refresh scheduling** (`@Scheduled`) once the on-demand path is proven.
-6. **Settings page**, once there's at least one real setting (currency) and one real trigger (refresh) to back it.
-7. **AI structured extraction** (the Mumbai→Kerala scenario) — the first AI feature, once there's a real `trip_leg` shape to draft into and a review/accept flow to draft against.
+1. **Masters first, minimal set.** `country`, `city`, `currency` (Travel + Property, each schema's own copy) — pull once from GeoNames/REST Countries/Frankfurter, verify the refresh mechanism works before building anything on top of it. **Partially done (2026-09-16, §20):** `city` + `currency` refresh built and on-demand-triggerable in both services via GeoNames/Frankfurter — not yet runtime-verified (compile gap, §12), and `country`/REST Countries isn't wired at all yet.
+2. **Transaction tables, matching the frontend's existing shape.** `trip_plan`/`route_option`/`trip_leg` and `property_plan`/`cost_estimate` — deliberately designed to match `tripData.ts`/`cityData.ts`/`areaData.ts` already, so the frontend swaps its data source rather than being rebuilt. **Schema exists** (Flyway V2, §16) — no application code reads/writes any of these tables yet.
+3. **Audit logging from day one of transaction tables** — cheaper to build in from the start than retrofit. `audit_log` tables exist in the schema; nothing writes to them yet since no transaction code exists yet either.
+4. **Manual price/rent entry UI**, since no free live source exists for either — a form backed by `leg_price_quote`/`rent_snapshot`, append-only. Not started.
+5. **Master refresh scheduling** (`@Scheduled`) once the on-demand path is proven. The on-demand path now exists (§20) but hasn't run in production yet — scheduling remains a later step, correctly, per this list's own order.
+6. **Settings page**, once there's at least one real setting (currency) and one real trigger (refresh) to back it. **Done (2026-09-16, §20)** — both conditions this step was waiting on are now met.
+7. **AI structured extraction** (the Mumbai→Kerala scenario) — the first AI feature, once there's a real `trip_leg` shape to draft into and a review/accept flow to draft against. Not started — the AI *provider* plumbing this needs already exists (§18), but `trip_leg` has no application code yet (item 2), so there's nothing to extract into.
 8. **The rest of [docs/ai-capability-roadmap.md](docs/ai-capability-roadmap.md)'s sequence** — missing-field detection, tool calling, explanations, RAG — each only after the step before it is genuinely working, per that document's own rule.
 
 ---

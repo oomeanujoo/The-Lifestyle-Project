@@ -18,10 +18,20 @@ spring:
 # are ever hardcoded here, and an unset variable just leaves that
 # integration unconfigured (isConfigured() returns false, calls are skipped)
 # rather than failing startup. See TECHNICAL_ARCHITECTURE.md §18/§22.
+# Every rate limit below is set from that provider's OWN published number,
+# researched 2026-09-16 (not assumed), with a safety margin — except
+# data.gov.in, which publishes no numeric limit anywhere found; that one is
+# an explicit, conservative guess, flagged as such rather than invented
+# with false confidence. See TECHNICAL_ARCHITECTURE.md §17.3/§18.
 app:
   geonames:
     username: ${GEONAMES_USERNAME:}
     base-url: http://api.geonames.org
+    # GeoNames' own published free-tier ceiling: 1,000 credits/hour,
+    # 10,000/day (geonames.org/export/credits.html). 10/min ≈ 600/hour —
+    # comfortably under that, with headroom for the manual debug endpoint too.
+    limit-for-period: ${GEONAMES_LIMIT:10}
+    refresh-period-ms: ${GEONAMES_REFRESH_MS:60000}
   datagovin:
     api-key: ${DATA_GOV_IN_API_KEY:}
     # The rent/cost dataset resource saved during account setup (§22.2) —
@@ -29,20 +39,45 @@ app:
     # to default here; override only if you point at a different dataset.
     resource-id: ${DATA_GOV_IN_RESOURCE_ID:5c2f62fe-5afa-4119-a499-fec9d604d5bd}
     base-url: https://api.data.gov.in
+    # UNVERIFIED — data.gov.in publishes no numeric rate limit we could
+    # find anywhere. This is a deliberately conservative guess, not a
+    # researched number; tighten or loosen once a real one is confirmed.
+    limit-for-period: ${DATA_GOV_IN_LIMIT:10}
+    refresh-period-ms: ${DATA_GOV_IN_REFRESH_MS:60000}
+  frankfurter:
+    base-url: ${FRANKFURTER_BASE_URL:https://api.frankfurter.dev/v1}
+    # Frankfurter publishes no hard quota (its own docs say "soft fair-use
+    # limits, no monthly/daily caps") — this is a self-imposed courtesy
+    # cap, not something Frankfurter enforces on us.
+    limit-for-period: ${FRANKFURTER_LIMIT:20}
+    refresh-period-ms: ${FRANKFURTER_REFRESH_MS:60000}
   ai:
     ollama:
       model: ${OLLAMA_MODEL:qwen3:4b-instruct}
       base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
+      read-timeout-seconds: ${OLLAMA_READ_TIMEOUT_SECONDS:420}
+      # Local — no external quota exists. This cap is purely a safety
+      # valve against an accidental runaway loop pegging the CPU.
+      limit-for-period: ${OLLAMA_LIMIT:60}
+      refresh-period-ms: ${OLLAMA_REFRESH_MS:60000}
     groq:
       api-key: ${GROQ_API_KEY:}
       model: ${GROQ_MODEL:llama-3.1-8b-instant}
       base-url: https://api.groq.com/openai/v1
+      # Groq's published free-tier ceiling is 30 requests/minute (org-wide,
+      # per model). 25/min leaves a safety margin.
+      limit-for-period: ${GROQ_LIMIT:25}
+      refresh-period-ms: ${GROQ_REFRESH_MS:60000}
     mistral:
       api-key: ${MISTRAL_API_KEY:}
       model: ${MISTRAL_MODEL:mistral-small-latest}
       base-url: https://api.mistral.ai/v1
-    rate-limit:
-      requests-per-minute: ${AI_REQUESTS_PER_MINUTE:20}
+      # Mistral's published free-tier ceiling is 1 request PER SECOND,
+      # org-wide — expressed as "1 per 1.2s" rather than "60 per minute",
+      # since a per-minute bucket would let a burst blow straight past
+      # the real 1/sec limit in the first second of every minute.
+      limit-for-period: ${MISTRAL_LIMIT:1}
+      refresh-period-ms: ${MISTRAL_REFRESH_MS:1200}
 
 server:
   port: ${INTEGRATION_PORT:8083}

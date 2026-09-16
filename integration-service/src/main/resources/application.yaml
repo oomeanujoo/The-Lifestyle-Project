@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: integration-service
+  profiles:
+    default: local
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:postgres}?currentSchema=integration
+    username: ${INTEGRATION_DB_USER:integration_app}
+    password: ${INTEGRATION_DB_PASSWORD:integration-local-only}
+  flyway:
+    enabled: true
+    schemas: integration
+    default-schema: integration
+    create-schemas: true
+
+# External API credentials — every value below reads from an environment
+# variable that YOU set locally (e.g. from your own LOCAL-ACCESS.md); none
+# are ever hardcoded here, and an unset variable just leaves that
+# integration unconfigured (isConfigured() returns false, calls are skipped)
+# rather than failing startup. See TECHNICAL_ARCHITECTURE.md §18/§22.
+app:
+  geonames:
+    username: ${GEONAMES_USERNAME:}
+    base-url: http://api.geonames.org
+  datagovin:
+    api-key: ${DATA_GOV_IN_API_KEY:}
+    # The rent/cost dataset resource saved during account setup (§22.2) —
+    # this id is a public dataset identifier, not a credential, so it's safe
+    # to default here; override only if you point at a different dataset.
+    resource-id: ${DATA_GOV_IN_RESOURCE_ID:5c2f62fe-5afa-4119-a499-fec9d604d5bd}
+    base-url: https://api.data.gov.in
+  ai:
+    ollama:
+      model: ${OLLAMA_MODEL:qwen3:4b-instruct}
+      base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
+    groq:
+      api-key: ${GROQ_API_KEY:}
+      model: ${GROQ_MODEL:llama-3.1-8b-instant}
+      base-url: https://api.groq.com/openai/v1
+    mistral:
+      api-key: ${MISTRAL_API_KEY:}
+      model: ${MISTRAL_MODEL:mistral-small-latest}
+      base-url: https://api.mistral.ai/v1
+    rate-limit:
+      requests-per-minute: ${AI_REQUESTS_PER_MINUTE:20}
+
+server:
+  port: ${INTEGRATION_PORT:8083}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n'

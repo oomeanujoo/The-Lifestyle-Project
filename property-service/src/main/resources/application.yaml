@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: property-service
+  profiles:
+    default: local
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:postgres}?currentSchema=property
+    username: ${PROPERTY_DB_USER:property_app}
+    password: ${PROPERTY_DB_PASSWORD:property-local-only}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: property
+  flyway:
+    enabled: true
+    schemas: property
+    default-schema: property
+    create-schemas: true
+
+server:
+  port: ${PROPERTY_PORT:8082}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+logging:
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n'

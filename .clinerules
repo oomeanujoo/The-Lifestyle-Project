@@ -1,0 +1,4 @@
+Read AGENTS.md, then docs/agent-context/START-HERE.md.
+Follow their approval and Git rules.
+Never edit, generate artifacts, commit, push, or run destructive commands
+without the required explicit permission.

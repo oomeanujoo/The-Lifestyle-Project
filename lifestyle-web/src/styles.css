@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap');
+@import "tailwindcss";
+
+/* Brand design tokens — the only "custom CSS" this project should need.
+   Everything else is Tailwind utility classes in components. See
+   TECHNICAL_ARCHITECTURE.md §2 (visual identity) and the decision log
+   entry on adopting Tailwind instead of hand-written CSS. */
+@theme {
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
+
+  --color-brand-950: #143f40;
+  --color-brand-900: #174b44;
+  --color-brand-700: #1c685c;
+  --color-brand-600: #21745b;
+  --color-brand-500: #397266;
+  --color-brand-100: #eaf0e8;
+  --color-brand-50: #f8f6f1;
+
+  --color-ink: #173337;
+  --color-muted-700: #536b66;
+  --color-muted-600: #6b7a78;
+  --color-muted-500: #87938d;
+  --color-line: #e8e8e1;
+  --color-error: #a54d41;
+
+  /* Slow, gentle glide — a small fast slide reads as a "blink"; a bigger
+     distance over a longer, smooth-deceleration curve reads as graceful. */
+  --animate-slide-in: slide-in 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(70px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* Entry gate: a soft, spread glow rather than a "flash event" — no shape,
+     no hard edge, low peak brightness, slow gentle timing. The eye should
+     register "the screen got a little brighter for a moment", not "a
+     diamond flashed". One-off exception to the brand palette for this one
+     screen — see the decision log. */
+  --animate-hero-flash: hero-flash 1.6s ease-in-out forwards;
+  @keyframes hero-flash {
+    0% { opacity: 0; transform: scale(0.85); }
+    35% { opacity: 0.5; transform: scale(1.05); }
+    100% { opacity: 0; transform: scale(1.25); }
+  }
+
+  /* --flash-peak is set per element (JSX inline style) so each ambient
+     glow can have its own intensity — small ones a little brighter, big
+     "softbox" ones barely there — from one shared keyframe. Rise is quick,
+     the fade-out is the long part (mirrors the hero flash's own soft
+     tail) — a fast cutoff at the end is what read as "it just goes". */
+  --animate-camera-flash: camera-flash 5.5s ease-in-out infinite;
+  @keyframes camera-flash {
+    0%, 45%, 100% { opacity: 0; }
+    52% { opacity: var(--flash-peak, 0.18); }
+    65% { opacity: calc(var(--flash-peak, 0.18) * 0.4); }
+    85% { opacity: 0; }
+  }
+
+  /* Starts while the hero flash is still fading (not after), so the
+     handoff reads as one continuous moment instead of two visible steps. */
+  --animate-entry-reveal: entry-reveal .9s cubic-bezier(0.16, 1, 0.3, 1) .3s both;
+  @keyframes entry-reveal {
+    from { opacity: 0; transform: translateY(8px) scale(0.99); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+}
+
+body {
+  font-synthesis: none;
+  /* Matches the app's own cream base (SectionPanel, cards, etc). Without
+     this, any brief gap between components unmounting/mounting — like the
+     entry gate handing off to the Dashboard — shows the browser's default
+     white instead, which reads as a flash. */
+  background: #f8f6f1;
+}

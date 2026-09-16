@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: travel-service
+  profiles:
+    default: local
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:postgres}?currentSchema=travel
+    username: ${TRAVEL_DB_USER:travel_app}
+    password: ${TRAVEL_DB_PASSWORD:travel-local-only}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: travel
+  flyway:
+    enabled: true
+    schemas: travel
+    default-schema: travel
+    create-schemas: true
+
+server:
+  port: ${TRAVEL_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n'

@@ -1,4 +1,16 @@
 Read AGENTS.md, then docs/agent-context/START-HERE.md.
 Follow their approval and Git rules.
+At the start of each task, read agent-tasks/cline-task.md. If its status is READY,
+take that as your assigned task. Work only within its file ownership. Record
+results in agent-tasks/cline-result.md and mark the task DONE when finished.
+Check the active task status before resuming and before the next file change.
+If it is CANCELLED, stop that task, write a brief handoff, and do not edit its
+transferred files. Follow the takeover rule in agent-tasks/README.md.
+Then read agent-tasks/cline-next-task.md. If its status is READY, start it in
+the same session, following its separate ownership and result instructions.
+After that task is DONE, read agent-tasks/cline-03-task.md. Start it only if
+READY; it is a small Travel UI integration task with its own result file.
+This does not depend on Claude finishing its task.
+The task file assigns work; it does not waive approval rules in AGENTS.md.
 Never edit, generate artifacts, commit, push, or run destructive commands
 without the required explicit permission.

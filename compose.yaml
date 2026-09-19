@@ -16,6 +16,7 @@ services:
     volumes:
       - lifestyle-postgres:/var/lib/postgresql
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+      - ./scripts/lifestyle-master-schema.sql:/docker-entrypoint-initdb.d/02-lifestyle-master-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -24,6 +25,9 @@ services:
   ollama:
     profiles: [ai]
     image: ollama/ollama:0.34.1
+    environment:
+      OLLAMA_LOAD_TIMEOUT: ${OLLAMA_LOAD_TIMEOUT:-10m}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-10m}
     ports:
       - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
     volumes:
@@ -83,6 +87,8 @@ services:
       # integration-service container — every master-data refresh call
       # silently fails as a result. See TECHNICAL_ARCHITECTURE.md §17.3/§18.
       INTEGRATION_SERVICE_URL: http://integration-service:8083
+      OSRM_ENABLED: ${OSRM_ENABLED:-false}
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-https://router.project-osrm.org}
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx${TRAVEL_JVM_MAX_HEAP:-512m}
     ports:
       - "127.0.0.1:${TRAVEL_PORT:-8081}:8081"
@@ -153,7 +159,7 @@ services:
       INTEGRATION_DB_PASSWORD: ${INTEGRATION_DB_PASSWORD:?Set INTEGRATION_DB_PASSWORD in an ignored .env file}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b-instruct}
-      OLLAMA_READ_TIMEOUT_SECONDS: ${OLLAMA_READ_TIMEOUT_SECONDS:-420}
+      OLLAMA_READ_TIMEOUT_SECONDS: ${OLLAMA_READ_TIMEOUT_SECONDS:-720}
       # These were missing entirely — Compose does NOT forward host/.env
       # variables into a container unless listed here explicitly, so
       # integration-service always saw these as unset regardless of what
@@ -164,7 +170,7 @@ services:
       DATA_GOV_IN_API_KEY: ${DATA_GOV_IN_API_KEY:-}
       DATA_GOV_IN_RESOURCE_ID: ${DATA_GOV_IN_RESOURCE_ID:-5c2f62fe-5afa-4119-a499-fec9d604d5bd}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-small-latest}
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx${INTEGRATION_JVM_MAX_HEAP:-512m}

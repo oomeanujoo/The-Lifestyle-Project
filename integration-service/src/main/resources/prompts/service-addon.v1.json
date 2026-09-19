@@ -1,0 +1,16 @@
+{
+  "masterType": "service_addon",
+  "version": "v1",
+  "purpose": "Draft candidate service-addon reference rows for a property-listing application (an optional extra service or amenity a listing can offer, e.g. housekeeping).",
+  "scope": "Only real, commonly-offered residential service add-ons. Do not invent addons that are not genuinely offered in real property listings.",
+  "requiredFields": ["code", "label", "evidence"],
+  "fieldFormats": {
+    "code": "Uppercase snake_case-style code, no spaces, must match the pattern below.",
+    "label": "Short human-readable label, e.g. 'Housekeeping'.",
+    "evidence": "One sentence explaining why this is a real, commonly-offered add-on — not a citation, and never treated as independent verification on its own."
+  },
+  "allowedValues": null,
+  "codeFormatRegex": "^[A-Z][A-Z0-9_]{2,39}$",
+  "evidenceRequirements": "State in one sentence why this is a real, commonly-offered service add-on. A code is only marked verified here because it matches the fixed format rule above, checked deterministically in Java, never because the model asserted it — service_addon has no fixed allowed-values list, so verification here is format-only, not a claim the add-on itself is universally standard.",
+  "exampleResponse": "[{\"code\":\"HOUSEKEEPING\",\"label\":\"Housekeeping\",\"evidence\":\"A commonly-offered residential service add-on across property-listing platforms.\"}]"
+}

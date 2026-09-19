@@ -24,7 +24,7 @@ class PlaceSuggestionUseCaseTest {
     // the network — it only proves the "no provider configured" path.
     private static PlaceSuggestionUseCase newUseCase() {
         var unconfiguredProvider = new ExternalApisProperties.Ai.Provider("", "", "", 25, 60000);
-        var unconfiguredLocal = new ExternalApisProperties.Ai.Local("", "", 420, 60, 60000);
+        var unconfiguredLocal = new ExternalApisProperties.Ai.Local("", "", 720, 60, 60000);
         var properties = new ExternalApisProperties(
             new ExternalApisProperties.GeoNames("", "http://api.geonames.org", 10, 60000),
             new ExternalApisProperties.DataGovIn("", "5c2f62fe-5afa-4119-a499-fec9d604d5bd", "https://api.data.gov.in", 10, 60000),

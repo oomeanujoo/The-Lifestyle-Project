@@ -6,6 +6,7 @@ import com.thelifestyle.integration.adapter.out.frankfurter.FrankfurterRates;
 import com.thelifestyle.integration.adapter.out.geonames.GeoNamesClient;
 import com.thelifestyle.integration.adapter.out.geonames.GeoNamesEntry;
 import com.thelifestyle.integration.adapter.out.resilience.HealthStatusRegistry;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -14,12 +15,18 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
-// GeoNames and Frankfurter here are called directly by travel-service and
-// property-service's MasterRefreshUseCase (§17/§18) — this is genuinely
-// live-called now, not just a manual debug endpoint. data.gov.in's
-// datagovin/sample endpoint remains manual-trigger only: its dataset's
-// exact response schema hasn't been inspected against a real key/response
-// yet, so no refresh job consumes it — see TECHNICAL_ARCHITECTURE.md §18.
+// Manual diagnostic/passthrough endpoints only — not the API
+// travel-service/property-service should call. Since the single-owner
+// change (§17/§20), GeoNames/Frankfurter are called internally by this
+// service's own MasterDataRefreshUseCase, not through HTTP to itself; the
+// endpoints here exist purely so a person can exercise each client by hand
+// (e.g. to verify a credential actually works). @Hidden keeps them out of
+// the public Swagger contract — MasterDataController is the real API.
+// data.gov.in's datagovin/sample endpoint remains manual-trigger only for
+// a different reason: its dataset's exact response schema hasn't been
+// inspected against a real key/response yet, so no refresh job consumes it
+// — see TECHNICAL_ARCHITECTURE.md §18.
+@Hidden
 @RestController
 @RequestMapping("/api/integration/v1/masters")
 public class MasterLookupController {
@@ -49,8 +56,8 @@ public class MasterLookupController {
     }
 
     @GetMapping("/frankfurter/latest")
-    public FrankfurterRates frankfurterLatest(@RequestParam("base") String base, @RequestParam("symbols") String symbols) {
-        return frankfurterClient.latest(base, symbols);
+    public FrankfurterRates frankfurterLatest(@RequestParam("base") String base) {
+        return frankfurterClient.latest(base);
     }
 
     // Same "decided on the last real hit" health model as

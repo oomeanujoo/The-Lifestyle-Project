@@ -14,18 +14,11 @@ export type MasterStatus = {
   lastStatus: string | null
 }
 
-export type Section = { id: 'travel' | 'property'; label: string; basePath: string }
+const BASE_PATH = '/api/integration/v1/masters/lifestyle'
 
-// The two sections a refresh covers — everything else on this page (status
-// rows, currency list) comes from calling these endpoints, not from a
-// hardcoded assumption about which masters exist.
-export const SECTIONS: Section[] = [
-  { id: 'travel', label: 'Travel', basePath: '/api/travel/v1/masters' },
-  { id: 'property', label: 'Property', basePath: '/api/property/v1/masters' },
-]
+// Integration owns the shared masters; Settings never refreshes domain copies.
+export const fetchStatus = () => apiGet<MasterStatus[]>(`${BASE_PATH}/refresh-status`)
 
-export const fetchStatus = (section: Section) => apiGet<MasterStatus[]>(`${section.basePath}/refresh-status`)
+export const triggerRefresh = () => apiPost<MasterRefreshOutcome[]>(`${BASE_PATH}/refresh`)
 
-export const triggerRefresh = (section: Section) => apiPost<MasterRefreshOutcome[]>(`${section.basePath}/refresh`)
-
-export const fetchCurrencies = (section: Section) => apiGet<string[]>(`${section.basePath}/currencies`)
+export const fetchCurrencies = () => apiGet<string[]>(`${BASE_PATH}/currencies`)

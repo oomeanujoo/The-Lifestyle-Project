@@ -3,6 +3,7 @@ import { AppShell } from './layout/AppShell'
 import { DashboardPage } from './pages/dashboard/DashboardPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { TravelFolderPage } from './features/travel/TravelFolderPage'
+import { RouteDetailPage } from './features/travel/RouteDetailPage'
 import { TripDetailPage } from './features/travel/TripDetailPage'
 import { CityFolderPage } from './features/property/CityFolderPage'
 import { CityDetailPage } from './features/property/CityDetailPage'
@@ -16,6 +17,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/travel" element={<TravelFolderPage />} />
+        <Route path="/travel/routes/detail" element={<RouteDetailPage />} />
         <Route path="/travel/trips/:tripId" element={<TripDetailPage />} />
         <Route path="/property" element={<CityFolderPage />} />
         <Route path="/property/cities/:cityId" element={<CityDetailPage />} />

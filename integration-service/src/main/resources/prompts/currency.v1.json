@@ -1,0 +1,15 @@
+{
+  "masterType": "currency",
+  "version": "v1",
+  "purpose": "DOCUMENTATION ONLY — currency already has a real, verified provider (Frankfurter, via MasterDataRefreshUseCase.refreshCurrencies()) and is not wired to the AI-acquisition endpoint. This definition exists so every master type Integration currently supports has a recorded prompt shape, per the task's own requirement, not because AI should originate currency data.",
+  "scope": "Not used to call any AI provider today. Exchange rates change continuously and must always come from Frankfurter, never an AI estimate.",
+  "requiredFields": ["isoCode", "evidence"],
+  "fieldFormats": {
+    "isoCode": "ISO 4217, uppercase, 3 letters.",
+    "evidence": "One sentence — never treated as independent verification; ISO 4217 membership is the only real check, and Frankfurter's own live rate is the only acceptable rate source."
+  },
+  "allowedValues": null,
+  "codeFormatRegex": "^[A-Z]{3}$",
+  "evidenceRequirements": "State in one sentence why this ISO code is real. A code is only marked verified here because it matches the ISO 4217 format rule, checked deterministically in Java — never because the model asserted it, and never for the exchange rate itself, which must always come from Frankfurter.",
+  "exampleResponse": "[{\"isoCode\":\"CHF\",\"evidence\":\"A real ISO 4217 currency code (Swiss Franc).\"}]"
+}

@@ -1,14 +1,14 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { searchPlaces, AI_FALLBACK_NOTICE, type PlaceMatch } from '../lib/placeSearch'
 
 // Generic search box — the frontend half of the DB-first / AI-fallback
-// design in TECHNICAL_ARCHITECTURE.md §18. Reused as-is by both Travel
-// (searching place names inside saved trip legs) and Property (searching
-// city/area/locality masters) — only `scope` changes, per the
-// generic-over-bespoke rule in §10. Local matches render instantly; when
-// nothing local matches, it shows the honest AI-fallback notice rather than
-// faking a call, since no backend/AI provider is wired up yet.
+// design in TECHNICAL_ARCHITECTURE.md §18. Reused by both Travel (a real,
+// live lifestyle_master.city search, §13 decision log 2026-09-19) and
+// Property (still static illustrative data — see placeSearch.ts for why)
+// — only `scope` changes, per the generic-over-bespoke rule in §10.
+// Debounced since Travel's search is now a real network request per
+// keystroke otherwise.
 export function PlaceAutocomplete({ scope, placeholder, onSelect }: {
   scope: 'travel' | 'property'
   placeholder: string
@@ -16,11 +16,28 @@ export function PlaceAutocomplete({ scope, placeholder, onSelect }: {
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const [results, setResults] = useState<PlaceMatch[]>([])
   const listId = useId()
 
   const trimmed = query.trim()
-  const results = searchPlaces(scope, trimmed)
   const showResults = open && trimmed.length >= 2
+
+  useEffect(() => {
+    if (trimmed.length < 2) {
+      setResults([])
+      return
+    }
+    let active = true
+    const timer = setTimeout(() => {
+      searchPlaces(scope, trimmed)
+        .then(matches => { if (active) setResults(matches) })
+        .catch(() => { if (active) setResults([]) })
+    }, 200)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [scope, trimmed])
 
   const pick = (match: PlaceMatch) => {
     onSelect(match)

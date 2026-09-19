@@ -55,14 +55,14 @@ app:
     ollama:
       model: ${OLLAMA_MODEL:qwen3:4b-instruct}
       base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
-      read-timeout-seconds: ${OLLAMA_READ_TIMEOUT_SECONDS:420}
+      read-timeout-seconds: ${OLLAMA_READ_TIMEOUT_SECONDS:720}
       # Local — no external quota exists. This cap is purely a safety
       # valve against an accidental runaway loop pegging the CPU.
       limit-for-period: ${OLLAMA_LIMIT:60}
       refresh-period-ms: ${OLLAMA_REFRESH_MS:60000}
     groq:
       api-key: ${GROQ_API_KEY:}
-      model: ${GROQ_MODEL:llama-3.1-8b-instant}
+      model: ${GROQ_MODEL:openai/gpt-oss-20b}
       base-url: https://api.groq.com/openai/v1
       # Groq's published free-tier ceiling is 30 requests/minute (org-wide,
       # per model). 25/min leaves a safety margin.
@@ -78,6 +78,37 @@ app:
       # the real 1/sec limit in the first second of every minute.
       limit-for-period: ${MISTRAL_LIMIT:1}
       refresh-period-ms: ${MISTRAL_REFRESH_MS:1200}
+  masters:
+    # Which cities this service's own refresh looks up by exact name — writes
+    # into the shared lifestyle_master schema (scripts/lifestyle-master-schema.sql),
+    # which Travel/Property read via this service's API rather than owning
+    # their own copies. Matches the illustrative places already in
+    # tripData.ts/cityData.ts (Dubai, an international example, has no
+    # bulk-discovery pass, so it stays in this explicit list).
+    seed-cities: ${MASTER_SEED_CITIES:Pune,Mumbai,Gwalior,Delhi,Dubai,Bengaluru}
+    # AED was the original currency choice but Frankfurter is ECB-based and
+    # doesn't cover it (confirmed live, 2026-09-17) — base stays INR, and
+    # currency refresh now imports every currency Frankfurter returns for
+    # this base, not a pre-configured shortlist.
+    base-currency: ${MASTER_BASE_CURRENCY:INR}
+    # Bulk Indian-city discovery bounds (GeoNames searchJSON by country,
+    # ordered by population — see GeoNamesClient.searchByCountry) — real,
+    # sourced rows only, paged rather than one unbounded request, so a
+    # refresh can grow past the six seed-cities names above without ever
+    # inventing a city. Target 100+ distinct cities; page size and max
+    # pages bound total GeoNames credits spent per refresh
+    # (pageSize * maxPages = 500 worst case, well under the 1,000
+    # credits/hour ceiling this account already respects via
+    # ResilienceGuard).
+    india-city-target-count: ${MASTER_INDIA_CITY_TARGET_COUNT:100}
+    india-city-page-size: ${MASTER_INDIA_CITY_PAGE_SIZE:100}
+    india-city-max-pages: ${MASTER_INDIA_CITY_MAX_PAGES:5}
+    # Indian pincode refresh runs one searchPostalCodes call per city — with
+    # 100+ Indian cities now real, refreshing pincodes for literally all of
+    # them in one pass would spend most of the hourly GeoNames quota on a
+    # single button click. Bounded to this many cities (by name, same order
+    # lifestyle_master.city returns them) per refresh instead.
+    india-pincode-city-limit: ${MASTER_INDIA_PINCODE_CITY_LIMIT:20}
 
 server:
   port: ${INTEGRATION_PORT:8083}

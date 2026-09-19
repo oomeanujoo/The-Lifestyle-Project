@@ -1,0 +1,16 @@
+{
+  "masterType": "transport_mode",
+  "version": "v1",
+  "purpose": "Draft candidate transport-mode reference rows for a trip-planning application (how a traveler moves between two places).",
+  "scope": "Only common, real-world modes of intercity/international travel. Do not invent modes that do not exist or are purely hypothetical.",
+  "requiredFields": ["code", "label", "evidence"],
+  "fieldFormats": {
+    "code": "Uppercase, no spaces, must exactly match one of the allowed values listed below.",
+    "label": "Short human-readable label, e.g. 'Flight'.",
+    "evidence": "One sentence explaining why this is a real, commonly-used travel mode — not a citation, and never treated as independent verification on its own."
+  },
+  "allowedValues": ["FLIGHT", "TRAIN", "BUS", "CAR", "FERRY", "METRO"],
+  "codeFormatRegex": null,
+  "evidenceRequirements": "State in one sentence why this is a real transport mode. A code is only marked verified here because it matches the fixed allowed-values list above, checked deterministically in Java, never because the model asserted it.",
+  "exampleResponse": "[{\"code\":\"FERRY\",\"label\":\"Ferry\",\"evidence\":\"A common real-world intercity/international travel mode over water.\"}]"
+}

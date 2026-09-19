@@ -65,6 +65,22 @@ public class MistralAiProvider implements AiProvider {
             .toList();
     }
 
+    @Override
+    public String complete(String prompt) {
+        if (!isConfigured()) return null;
+
+        var response = restClient.post()
+            .uri(config.baseUrl() + "/chat/completions")
+            .header("Authorization", "Bearer " + config.apiKey())
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(new ChatRequest(config.model(), List.of(new ChatMessage("user", prompt))))
+            .retrieve()
+            .body(ChatResponse.class);
+
+        if (response == null || response.choices() == null || response.choices().isEmpty()) return null;
+        return response.choices().get(0).message().content();
+    }
+
     record ChatMessage(String role, String content) {}
     record ChatRequest(String model, List<ChatMessage> messages) {}
     record ChatChoice(ChatMessage message) {}

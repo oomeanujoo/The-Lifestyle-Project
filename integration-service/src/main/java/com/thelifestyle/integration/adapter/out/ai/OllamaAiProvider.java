@@ -56,6 +56,21 @@ public class OllamaAiProvider implements AiProvider {
             .toList();
     }
 
+    @Override
+    public String complete(String prompt) {
+        if (!isConfigured()) return null;
+        var response = client.post()
+            .uri(config.baseUrl() + "/api/chat")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(new ChatRequest(config.model(), false, false,
+                List.of(new ChatMessage("user", prompt)),
+                Map.of("num_ctx", 2048, "num_predict", 512)))
+            .retrieve()
+            .body(ChatResponse.class);
+        if (response == null || response.message() == null) return null;
+        return response.message().content();
+    }
+
     record ChatMessage(String role, String content) {}
     record ChatRequest(String model, boolean stream, boolean think,
                        List<ChatMessage> messages, Map<String, Integer> options) {}

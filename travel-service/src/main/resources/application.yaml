@@ -19,24 +19,32 @@ spring:
     default-schema: travel
     create-schemas: true
 
-# Where to reach integration-service for external calls (§18) — this
-# service never calls Groq/Mistral/GeoNames directly, only through it.
+# Where to reach integration-service — the single owner of lifestyle_master
+# (§17/§20). This service no longer refreshes any master data itself, or
+# calls Groq/Mistral/GeoNames directly; it only reads city/currency/
+# transport-mode masters through integration-service's API and, when
+# domain code needs an FK-satisfying local row, mirrors that canonical
+# value into its own city/currency/transport_mode tables on demand — see
+# LocalMasterIdResolver.
 app:
   integration:
     base-url: ${INTEGRATION_SERVICE_URL:http://localhost:8083}
-  masters:
-    # The seed list a refresh looks up in GeoNames — matches the illustrative
-    # places already in tripData.ts. A real "crawl everything" refresh is a
-    # later step; this is the honest first version: known places, kept current.
-    seed-cities: ${TRAVEL_SEED_CITIES:Pune,Mumbai,Gwalior,Delhi,Dubai}
-    base-currency: ${BASE_CURRENCY:INR}
-    # AED was the original choice (relevant to the Dubai trip example) but
-    # Frankfurter is ECB-based and doesn't cover it — confirmed live,
-    # 2026-09-17: GET https://api.frankfurter.dev/v1/currencies has no AED
-    # key. Swapped for GBP so all three tracked currencies actually
-    # resolve; a Dubai-relevant rate needs a different free source later,
-    # honestly documented as a gap rather than silently always failing.
-    tracked-currencies: ${TRACKED_CURRENCIES:USD,EUR,GBP}
+  # Real road-route provider for the demo vertical slice (§21 phase
+  # road-route) — OSRM's free public demo server, no key, no SLA. Disabled
+  # by default; opt in with ROSM_ENABLED=true. Falls back to the existing
+  # deterministic straight-line (Haversine) comparison whenever this is
+  # disabled, misconfigured, or the provider call itself fails — never a
+  # 500, and never presented as equivalent to a real road distance.
+  routing:
+    osrm:
+      enabled: ${OSRM_ENABLED:false}
+      base-url: ${OSRM_BASE_URL:https://router.project-osrm.org}
+    # Deterministic fuel-cost inputs — explicit numbers, never AI-estimated
+    # or fetched from an unverified live price source (§10).
+    fuel-cost:
+      fuel-price-per-litre: ${FUEL_PRICE_PER_LITRE:100.0}
+      vehicle-km-per-litre: ${VEHICLE_KM_PER_LITRE:15.0}
+      currency: ${FUEL_COST_CURRENCY:INR}
 
 server:
   port: ${TRAVEL_PORT:8081}

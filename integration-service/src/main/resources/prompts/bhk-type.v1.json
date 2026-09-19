@@ -1,0 +1,16 @@
+{
+  "masterType": "bhk_type",
+  "version": "v1",
+  "purpose": "Draft candidate BHK (Bedroom-Hall-Kitchen) type reference rows for an Indian real-estate/property-listing application. bhk_type has no independent verified provider — this is the one master type this prompt pattern is fully wired for end to end.",
+  "scope": "Only standard, widely-recognized Indian residential unit-size codes. Do not invent regional or hypothetical variants not in general real-estate use.",
+  "requiredFields": ["code", "label", "evidence"],
+  "fieldFormats": {
+    "code": "Uppercase, no spaces, must exactly match one of the allowed values listed below.",
+    "label": "Short human-readable label, e.g. '2 Bedroom Hall Kitchen'.",
+    "evidence": "One sentence explaining why this code/label pairing is standard usage — not a citation, and never treated as independent verification on its own."
+  },
+  "allowedValues": ["STUDIO", "1RK", "1BHK", "2BHK", "3BHK", "4BHK", "5BHK_PLUS"],
+  "codeFormatRegex": null,
+  "evidenceRequirements": "State in one sentence why this is standard terminology. This is context for a human reviewer, not proof — a code is only marked verified here because it matches the fixed allowed-values list above, checked deterministically in Java, never because the model asserted it.",
+  "exampleResponse": "[{\"code\":\"2BHK\",\"label\":\"2 Bedroom Hall Kitchen\",\"evidence\":\"Standard Indian real-estate shorthand for a 2-bedroom apartment with a hall and kitchen, used across virtually all major listing platforms.\"}]"
+}

@@ -24,6 +24,17 @@ or not.
 Read `AGENTS.md`, then `docs/agent-context/START-HERE.md`,
 `CURRENT-STATE.md`, `NEXT-STEPS.md`, and `SESSION-HANDOFF.md`.
 Read `DECISIONS.md`, ADRs, architecture, and source only when relevant.
+`TECHNICAL_ARCHITECTURE_DECISION_LOG.md` (the long-form narrative history,
+split out of `TECHNICAL_ARCHITECTURE.md` on 2026-09-19) is never part of
+the default read — open it only when a specific past decision's reasoning
+is actually needed, not for routine context.
+`AGENT_PROMPTS.md` (repo root) holds exact, copy-paste Docker/Compose
+commands for Cline — starting/stopping/restarting containers, checking
+status, tailing logs, running a curl check. Every command in it is pure
+mechanical execution with no judgment call for Cline to make; Claude
+supplies the specific URL/body for any live check and interprets the
+pasted-back result. Use it instead of improvising an ops command each
+time one is needed.
 Use targeted `rg` searches; skip node_modules, .gradle, build, dist, IDE
 caches, and Git object storage.
 
@@ -69,9 +80,13 @@ code a developer new to it can follow, not clever-for-its-own-sake code.
 Every backend endpoint should be discoverable through the service's Swagger
 UI (`springdoc-openapi`) without hand-written API docs; do not add a new
 endpoint without letting it show up there. When you add functionality worth
-explaining, add a chapter to `TECHNICAL_ARCHITECTURE.md` (Section 13) using
+explaining, add an entry to `TECHNICAL_ARCHITECTURE_DECISION_LOG.md` using
 its template — not every change, only functionality a future reader would
-want explained.
+want explained. Keep `TECHNICAL_ARCHITECTURE.md` itself limited to the
+current architecture (what the system is, not the history of how it got
+there) — that separation is why the decision log was split into its own
+file on 2026-09-19; do not let entries drift back into the architecture
+document.
 
 ## Handoff
 After an approved working session, propose a small update to

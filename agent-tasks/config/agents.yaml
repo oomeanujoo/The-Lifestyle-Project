@@ -1,0 +1,120 @@
+# Agent capability registry — the machine-readable half of
+# docs/agent-coordination.md's routing table. Prose explains WHY a task
+# goes to an agent; this file is WHAT each agent actually is, kept as data
+# so a new agent is "add an entry + two files," never a doc rewrite.
+#
+# Nothing reads this file automatically today — there is no dispatcher
+# process, per docs/agent-coordination.md's own "this is not an
+# always-running process" note. It exists so the routing decision in that
+# doc's table has a single, precise, versioned source to point at instead
+# of restating each agent's shape in prose every time, and so onboarding a
+# new agent has a concrete checklist to copy (see
+# agent-tasks/templates/README.md).
+
+schema_version: 1
+
+agents:
+  - name: codex
+    role: director
+    cost_tier: paid
+    environment: personal-pc
+    runs_as: cli-session
+    task_file: agent-tasks/codex-task.md
+    result_file: null # the director does not report to itself; it reads the other two
+    file_ownership: []  # the director's own scope is the whole repo for planning/integration, never exclusive
+    capabilities:
+      - cross-service planning and task assignment
+      - shared schema cutover and data migration review
+      - final integration review across Claude's and Cline's results
+      - live database access on the personal PC
+      - git remote operations (push, PR/MR) — the only agent authorized to do so
+    proven_on:
+      - integration-service schema decisions
+      - reconciling two workers' independent results before merging guidance
+    hard_boundaries:
+      - never assigns itself work that Claude or Cline can do at lower cost
+      - never deletes a table or volume without a separate, explicit user approval
+
+  - name: cline
+    role: worker
+    cost_tier: free-or-local
+    environment: personal-pc
+    runs_as: vscode-extension
+    task_file: agent-tasks/cline-task.md
+    result_file: agent-tasks/cline-result.md
+    next_task_file: agent-tasks/cline-next-task.md
+    next_result_file: agent-tasks/cline-next-result.md
+    entry_point: .clinerules
+    file_ownership_pattern:
+      - lifestyle-web/**
+      - agent-tasks/cline-task.md
+      - agent-tasks/cline-result.md
+      - agent-tasks/cline-next-task.md
+      - agent-tasks/cline-next-result.md
+    capabilities:
+      - frontend/UI changes (React, TypeScript, Vite)
+      - local Docker Compose lifecycle (start/stop/rebuild/logs) via AGENT_PROMPTS.md
+      - live local runtime observation (real Java 25, real Postgres, real provider calls)
+      - manual verification/inspection tasks that need a running local stack
+    proven_on:
+      - route-planner UI rebuild to a live, free-text, debounced search
+      - Settings page master-refresh visibility
+    escalate_when:
+      - the fix requires backend/Java changes, or the API contract itself is unclear
+
+  - name: claude
+    role: worker
+    cost_tier: paid
+    environment: office-laptop
+    runs_as: vscode-extension
+    task_file: agent-tasks/claude-task.md
+    result_file: agent-tasks/claude-result.md
+    next_task_file: agent-tasks/claude-next-task.md
+    next_result_file: agent-tasks/claude-next-result.md
+    entry_point: CLAUDE.md
+    file_ownership_pattern:
+      - travel-service/**
+      - property-service/**
+      - integration-service/**
+      - "*.md architecture/decision-log docs"
+      - agent-tasks/claude-task.md
+      - agent-tasks/claude-result.md
+      - agent-tasks/claude-next-task.md
+      - agent-tasks/claude-next-result.md
+    hard_environment_limits:
+      - no Java 25 toolchain by default (mitigated this session via the
+        foojay-resolver-convention Gradle plugin — see the decision log
+        entry dated 2026-09-19 on real JDK auto-download)
+      - no git remote access; never commits or pushes on this machine
+    capabilities:
+      - backend Java service implementation (Spring Boot, hexagonal architecture)
+      - schema-aware application-layer changes (Flyway migrations owned by each service)
+      - architecture/decision-log documentation
+      - focused backend test authorship and execution
+    proven_on:
+      - travel-service CRUD build-out (itinerary_day, document_requirement, leg_price_quote)
+      - integration-service AI master-acquisition engine
+    escalate_when:
+      - live Java 25 or live-database verification is required on the personal PC
+        (Claude's own compile/test checks are real once the JDK-download
+        workaround is in place, but nothing here ever touches the shared
+        Postgres instance directly)
+
+# Adding a new agent (Gemini CLI, a second Claude instance, a CI bot, etc.):
+#   1. Give it an entry above: name, role, cost_tier, environment, its own
+#      task_file/result_file paths (and next_task_file/next_result_file if
+#      it should support a queued second assignment), file_ownership_pattern,
+#      capabilities, proven_on (start empty, grow it honestly over time).
+#   2. Copy agent-tasks/templates/task-template.md to
+#      agent-tasks/<name>-task.md and fill it in — do not invent a new
+#      shape per agent.
+#   3. Give the new agent an entry-point file it actually reads on startup
+#      (its own CLAUDE.md-equivalent, or the "entry_point" field above),
+#      pointing at docs/agent-coordination.md and its own task file — the
+#      same pattern CLAUDE.md and .clinerules already use.
+#   4. Add one row to docs/agent-coordination.md's routing table describing
+#      when work should go to it instead of an existing agent.
+# Never skip step 4 — an agent with no routing criterion just accumulates
+# tasks nobody decided to send it, the same "orphaned" failure mode a
+# reference multi-agent framework (AIDLC) documents for agents wired but
+# never called by any command.

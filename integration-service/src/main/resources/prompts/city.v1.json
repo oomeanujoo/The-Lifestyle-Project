@@ -1,0 +1,18 @@
+{
+  "masterType": "city",
+  "version": "v1",
+  "purpose": "DOCUMENTATION ONLY — city already has a real, verified provider (GeoNames, via MasterDataRefreshUseCase.refreshCities()) and is not wired to the AI-acquisition endpoint. This definition exists so every master type Integration currently supports has a recorded prompt shape, per the task's own requirement, not because AI should originate city data.",
+  "scope": "Not used to call any AI provider today. If ever needed as a last-resort draft path when GeoNames is unavailable, scope would be limited to real, existing, named cities only.",
+  "requiredFields": ["name", "countryCode", "latitude", "longitude", "evidence"],
+  "fieldFormats": {
+    "name": "The city's common English name.",
+    "countryCode": "ISO 3166-1 alpha-2, uppercase.",
+    "latitude": "Decimal degrees, -90 to 90.",
+    "longitude": "Decimal degrees, -180 to 180.",
+    "evidence": "One sentence on the coordinate source — never treated as independent verification; a candidate this prompt produced would stay UNVERIFIED, since no fixed allowed-values list or independently-checkable rule exists for arbitrary coordinates."
+  },
+  "allowedValues": null,
+  "codeFormatRegex": null,
+  "evidenceRequirements": "State the reasoning source in one sentence. Never independently verifiable the way a fixed code list is — a proposal for this master type would stay UNVERIFIED even after human acceptance would need to re-check coordinates against GeoNames itself before use.",
+  "exampleResponse": "[{\"name\":\"Example City\",\"countryCode\":\"IN\",\"latitude\":18.52,\"longitude\":73.85,\"evidence\":\"Commonly known coordinates for this city center.\"}]"
+}

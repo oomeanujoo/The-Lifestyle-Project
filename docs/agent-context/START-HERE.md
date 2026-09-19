@@ -19,6 +19,10 @@ is optional and must not be required for non-AI use.
 
 ## Reading order for a new task
 
+For multi-agent work, use [AI agent coordination](../agent-coordination.md)
+as the map of roles and task files. Read it when coordinating agents, not as
+part of every agent's initial context.
+
 1. `AGENTS.md`
 2. This file
 3. [Current state](CURRENT-STATE.md)
@@ -26,7 +30,16 @@ is optional and must not be required for non-AI use.
 5. [Latest session handoff](SESSION-HANDOFF.md)
 
 That five-file set is the recommended maximum initial read. Open the
-[decision log](DECISIONS.md), relevant ADRs, architecture documents,
+[compact ADR index](DECISIONS.md), relevant ADRs, `TECHNICAL_ARCHITECTURE.md`,
 or source directories only when the task needs them. Use targeted searches
 and avoid generated directories. Confirm current Git status before proposing
 changes.
+
+`TECHNICAL_ARCHITECTURE_DECISION_LOG.md` (repo root) is a separate, much
+longer file — the full narrative history of *why* things were built a
+certain way, split out of `TECHNICAL_ARCHITECTURE.md` on 2026-09-19 because
+it had grown to roughly 42% of that document's size. It is never part of
+routine context for a new task; open it only when a specific past
+decision's reasoning is actually needed. Do not confuse it with the
+compact ADR index above — they serve different purposes and neither
+duplicates the other.
